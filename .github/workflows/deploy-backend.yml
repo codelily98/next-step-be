@@ -3,19 +3,24 @@ name: Deploy Spring Boot Backend to GCP VM
 on:
     push:
         branches:
-            - main # main 브랜치에 push될 때 워크플로우 실행
+            - main
 
 env:
-    PROJECT_ID: next-step # ⭐ GCP 프로젝트 ID. 이미지에서 확인된 프로젝트 이름입니다.
-    GCR_HOSTNAME: gcr.io
-    IMAGE_NAME: spring-boot-backend # ⭐ Docker 이미지 이름 (예: my-api-server)
-    VM_INSTANCE_NAME: next-step-backend # ⭐ 배포할 VM 인스턴스 이름
-    VM_ZONE: asia-northeast3-a # ⭐ VM이 위치한 정확한 Zone (예: asia-northeast3-a) - 이미지에는 'asia-northeast3'만 있지만, Zone은 'asia-northeast3-a', 'b', 'c' 중 하나여야 합니다. VM 인스턴스 목록에서 next-step-backend 옆의 실제 Zone을 확인하여 정확하게 기입해주세요.
-    VM_USER: nextstep9898 # ⭐ VM에 접속할 사용자 이름
+    PROJECT_ID: next-step
+    # ⭐ GCR_HOSTNAME 대신 Artifact Registry 호스트 이름과 저장소 이름을 사용합니다.
+    # Artifact Registry 호스트 이름은 '리전-docker.pkg.dev' 형식입니다. (예: asia-northeast3-docker.pkg.dev)
+    # Artifact Registry 저장소 이름은 GCP에서 생성한 Docker 저장소 이름입니다. (예: docker-repo)
+    AR_HOSTNAME: asia-northeast3-docker.pkg.dev # ⭐ Artifact Registry 저장소 리전-docker.pkg.dev
+    AR_REPOSITORY: next-step-docker # ⭐ Artifact Registry에서 생성한 Docker 저장소 이름 (예: docker-repo)
+
+    IMAGE_NAME: spring-boot-backend
+    VM_INSTANCE_NAME: next-step-backend
+    VM_ZONE: asia-northeast3-c # ⭐ VM 인스턴스 목록에서 확인된 정확한 Zone (next-step-backend의 Zone)
+    VM_USER: nextstep9898
 
 jobs:
     build-and-deploy:
-        runs-on: ubuntu-latest # 워크플로우를 실행할 가상 환경
+        runs-on: ubuntu-latest
 
         steps:
             - name: Checkout code
@@ -26,15 +31,12 @@ jobs:
               with:
                   java-version: "17"
                   distribution: "temurin"
-                  cache: "gradle" # 또는 'maven'
+                  cache: "gradle"
 
-            - name: Build with Gradle # Gradle 사용 시
+            - name: Build with Gradle
               run: |
-                  chmod +x gradlew # gradlew 실행 권한 부여
-                  ./gradlew clean bootJar # bootJar 태스크로 실행 가능한 JAR 빌드
-
-            # - name: Build with Maven # Maven 사용 시 (Gradle 대신 사용)
-            #   run: mvn clean package -DskipTests # 테스트 건너뛰기
+                  chmod +x gradlew
+                  ./gradlew clean bootJar
 
             - name: Authenticate to GCP
               uses: google-github-actions/auth@v2
@@ -46,30 +48,27 @@ jobs:
               with:
                   project_id: ${{ env.PROJECT_ID }}
 
-            - name: Configure Docker to use gcloud as a credential helper
-              run: gcloud auth configure-docker ${GCR_HOSTNAME}
+            # ⭐ Docker 인증 명령을 Artifact Registry용으로 변경합니다.
+            # 이 명령은 Docker가 Artifact Registry에 인증할 수 있도록 자격 증명을 구성합니다.
+            - name: Configure Docker to use Artifact Registry as a credential helper
+              run: gcloud auth configure-docker ${AR_HOSTNAME}
 
-            - name: Build & Push Docker image
+            # ⭐ Docker 이미지 빌드 및 푸시 명령 변경: Artifact Registry 경로 사용
+            # 이미지 태그 형식이 'HOSTNAME/PROJECT_ID/REPOSITORY/IMAGE_NAME:TAG'로 변경됩니다.
+            - name: Build & Push Docker image to Artifact Registry
               run: |
-                  docker build -t ${GCR_HOSTNAME}/${PROJECT_ID}/${IMAGE_NAME}:latest .
-                  docker push ${GCR_HOSTNAME}/${PROJECT_ID}/${IMAGE_NAME}:latest
+                  docker build -t ${AR_HOSTNAME}/${PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}:latest .
+                  docker push ${AR_HOSTNAME}/${PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}:latest
 
-            # --- SSH_AND_SCP 액션을 제거하고 gcloud compute ssh 명령어를 직접 사용합니다. ---
-            # 이 방법을 사용하면 VM에 SSH 키를 수동으로 등록할 필요 없이,
-            # 서비스 계정이 VM에 대한 권한만 있으면 gcloud가 알아서 SSH 접속을 관리합니다.
+            # ⭐ VM 배포 명령 변경: Artifact Registry 이미지 경로 사용
             - name: Deploy to GCP VM using gcloud SSH
               run: |
-                  # VM_ZONE은 반드시 인스턴스가 위치한 정확한 Zone (예: asia-northeast3-a)을 지정해야 합니다.
-                  # VM 인스턴스가 'default' 네트워크에 있고, 서비스 계정이 Compute Admin 권한을 가지고 있다면
-                  # SSH 접속 및 docker 명령 실행이 가능합니다.
                   gcloud compute ssh ${VM_USER}@${VM_INSTANCE_NAME} \
                     --project=${PROJECT_ID} \
                     --zone=${VM_ZONE} \
                     --command="\
                       sudo docker stop ${IMAGE_NAME} || true && \
                       sudo docker rm ${IMAGE_NAME} || true && \
-                      sudo docker pull ${GCR_HOSTNAME}/${PROJECT_ID}/${IMAGE_NAME}:latest && \
-                      sudo docker run -d --name ${IMAGE_NAME} -p 8080:8080 ${GCR_HOSTNAME}/${PROJECT_ID}/${IMAGE_NAME}:latest \
+                      sudo docker pull ${AR_HOSTNAME}/${PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}:latest && \
+                      sudo docker run -d --name ${IMAGE_NAME} -p 8080:8080 ${AR_HOSTNAME}/${PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}:latest \
                     "
-              # gcloud compute ssh를 사용하려면 VM 인스턴스가 `Compute 인스턴스 Admin` 역할이 부여된 서비스 계정으로 실행되거나,
-              # 해당 서비스 계정이 SSH 접속 권한이 있어야 합니다.
