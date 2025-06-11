@@ -36,7 +36,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         // 프론트엔드의 모든 오리진을 포함합니다.
-        configuration.setAllowedOriginPatterns(List.of("https://*.portfolio-nextstep.info", "https://portfolio-nextstep.info"));
+        configuration.setAllowedOriginPatterns(List.of("https://*.portfolio-nextstep.info"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         // ⭐ 이 부분을 수정합니다: "Refresh-Token" 헤더를 명시적으로 추가!
         // 기존 "X-Requested-With", "Accept"도 필요하다면 그대로 유지
