@@ -6,16 +6,12 @@ on:
             - main
 
 env:
-    PROJECT_ID: next-step
-    # ⭐ GCR_HOSTNAME 대신 Artifact Registry 호스트 이름과 저장소 이름을 사용합니다.
-    # Artifact Registry 호스트 이름은 '리전-docker.pkg.dev' 형식입니다. (예: asia-northeast3-docker.pkg.dev)
-    # Artifact Registry 저장소 이름은 GCP에서 생성한 Docker 저장소 이름입니다. (예: docker-repo)
-    AR_HOSTNAME: asia-northeast3-docker.pkg.dev # ⭐ Artifact Registry 저장소 리전-docker.pkg.dev
-    AR_REPOSITORY: next-step-docker # ⭐ Artifact Registry에서 생성한 Docker 저장소 이름 (예: docker-repo)
-
+    PROJECT_ID: next-step-460309 # ⭐ PROJECT_ID를 실제 GCP 프로젝트 ID 'next-step-460309'로 변경합니다.
+    AR_HOSTNAME: asia-northeast3-docker.pkg.dev
+    AR_REPOSITORY: next-step-docker
     IMAGE_NAME: spring-boot-backend
     VM_INSTANCE_NAME: next-step-backend
-    VM_ZONE: asia-northeast3-c # ⭐ VM 인스턴스 목록에서 확인된 정확한 Zone (next-step-backend의 Zone)
+    VM_ZONE: asia-northeast3-c # VM 인스턴스 목록에서 확인된 정확한 Zone
     VM_USER: nextstep9898
 
 jobs:
@@ -48,20 +44,20 @@ jobs:
               with:
                   project_id: ${{ env.PROJECT_ID }}
 
-            # ⭐ Docker 인증 명령을 Artifact Registry용으로 변경합니다.
-            # 이 명령은 Docker가 Artifact Registry에 인증할 수 있도록 자격 증명을 구성합니다.
+            # Docker가 Artifact Registry에 인증할 수 있도록 자격 증명을 구성합니다.
             - name: Configure Docker to use Artifact Registry as a credential helper
-              run: sudo gcloud auth configure-docker ${AR_HOSTNAME}
+              run: gcloud auth configure-docker ${AR_HOSTNAME} # ⭐ 여기서 sudo를 제거합니다.
 
-            # ⭐ Docker 이미지 빌드 및 푸시 명령 변경: Artifact Registry 경로 사용
+            # Docker 이미지 빌드 및 푸시 명령: Artifact Registry 경로 사용
             # 이미지 태그 형식이 'HOSTNAME/PROJECT_ID/REPOSITORY/IMAGE_NAME:TAG'로 변경됩니다.
             - name: Build & Push Docker image to Artifact Registry
               run: |
-                  gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://asia-northeast3-docker.pkg.dev/
+                  # ⭐ gcloud auth print-access-token | docker login ... 명령을 제거합니다.
+                  # 위에 Configure Docker 스텝에서 이미 인증이 처리되었습니다.
                   sudo docker build -t ${AR_HOSTNAME}/${PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}:latest .
                   sudo docker push ${AR_HOSTNAME}/${PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}:latest
 
-            # ⭐ VM 배포 명령 변경: Artifact Registry 이미지 경로 사용
+            # VM 배포 명령: Artifact Registry 이미지 경로 사용
             - name: Deploy to GCP VM using gcloud SSH
               run: |
                   gcloud compute ssh ${VM_USER}@${VM_INSTANCE_NAME} \
