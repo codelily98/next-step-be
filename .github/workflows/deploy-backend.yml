@@ -57,6 +57,7 @@ jobs:
             # 이미지 태그 형식이 'HOSTNAME/PROJECT_ID/REPOSITORY/IMAGE_NAME:TAG'로 변경됩니다.
             - name: Build & Push Docker image to Artifact Registry
               run: |
+                  gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://asia-northeast3-docker.pkg.dev/
                   sudo docker build -t ${AR_HOSTNAME}/${PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}:latest .
                   sudo docker push ${AR_HOSTNAME}/${PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}:latest
 
