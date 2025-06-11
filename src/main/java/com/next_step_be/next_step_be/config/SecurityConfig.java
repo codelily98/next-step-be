@@ -5,6 +5,7 @@ import com.next_step_be.next_step_be.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -17,8 +18,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays; // Arrays.asList를 위해 필요합니다.
-import java.util.List; // List.of를 위해 필요합니다.
+import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -35,14 +36,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // 프론트엔드의 모든 오리진을 포함합니다.
-        configuration.setAllowedOriginPatterns(List.of("https://*.portfolio-nextstep.info"));
+        configuration.setAllowedOriginPatterns(List.of("https://*.portfolio-nextstep.info", "https://portfolio-nextstep.info")); // 추가 안전 처리
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        // ⭐ 이 부분을 수정합니다: "Refresh-Token" 헤더를 명시적으로 추가!
-        // 기존 "X-Requested-With", "Accept"도 필요하다면 그대로 유지
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Refresh-Token", "X-Requested-With", "Accept"));
         configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L); // Pre-flight 요청의 결과를 캐시할 시간 (초 단위)
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
@@ -53,14 +51,14 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
-            .cors(cors -> cors.configurationSource(corsConfigurationSource())) // 위에서 정의한 CORS 빈을 사용
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) // 세션 미사용
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**").permitAll() // 로그인, 회원가입, 로그아웃 등 인증 관련 경로는 모두 허용
-                .requestMatchers("/api/admin/**").hasRole("ADMIN") // ADMIN 역할이 필요한 경로
-                .anyRequest().authenticated() // 나머지 모든 요청은 인증 필요
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // ✅ 프리플라이트 요청 허용
+                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .anyRequest().authenticated()
             )
-            // JWT 인증 필터를 UsernamePasswordAuthenticationFilter 이전에 추가
             .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
