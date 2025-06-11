@@ -1,6 +1,6 @@
 plugins {
 	id 'java'
-	id 'org.springframework.boot' version '3.2.5' // 4.0.0은 아직 정식 릴리즈 아님
+	id 'org.springframework.boot' version '3.2.5'
 	id 'io.spring.dependency-management' version '1.1.5'
 }
 
@@ -9,7 +9,7 @@ version = '0.0.1-SNAPSHOT'
 
 java {
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(17) // 또는 21 사용 가능
+		languageVersion = JavaLanguageVersion.of(17)
 	}
 }
 
@@ -23,11 +23,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
-	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 
 	// DB
-	implementation 'org.mariadb.jdbc:mariadb-java-client:3.3.3'
-	runtimeOnly 'com.mysql:mysql-connector-j:8.3.0'
+	runtimeOnly 'com.mysql:mysql-connector-j'
 
 	// Redis
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -48,7 +46,6 @@ dependencies {
 	// 테스트
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
