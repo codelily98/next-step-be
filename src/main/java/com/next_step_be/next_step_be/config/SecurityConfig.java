@@ -6,13 +6,11 @@ import com.next_step_be.next_step_be.service.CustomUserDetailsService;
 
 import lombok.RequiredArgsConstructor;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -36,24 +34,23 @@ public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomUserDetailsService customUserDetailsService;
-    
+    // Removed @Autowired configureGlobal method as it's deprecated and caused circular reference.
+
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
         authProvider.setUserDetailsService(customUserDetailsService);
+        // PasswordEncoder bean is correctly referenced here.
         authProvider.setPasswordEncoder(passwordEncoder());
         return authProvider;
     }
-    
-    // ✅ AuthenticationManager Bean 등록 (for AuthService)
+
+    // AuthenticationManager Bean registration (for AuthService)
+    // This correctly gets the AuthenticationManager from the Configuration,
+    // which will use the registered DaoAuthenticationProvider.
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
         return configuration.getAuthenticationManager();
-    }
-    
-    @Autowired
-    public void configureGlobal(AuthenticationManagerBuilder auth) throws Exception {
-        auth.userDetailsService(customUserDetailsService).passwordEncoder(passwordEncoder());
     }
 
     @Bean
@@ -64,7 +61,9 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("https://*.portfolio-nextstep.info", "https://portfolio-nextstep.info")); // 추가 안전 처리
+        // It's generally better to use specific origins instead of patterns if possible
+        // but given the .info domain, patterns might be necessary.
+        configuration.setAllowedOriginPatterns(List.of("https://*.portfolio-nextstep.info", "https://portfolio-nextstep.info"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Refresh-Token", "X-Requested-With", "Accept"));
         configuration.setAllowCredentials(true);
@@ -82,12 +81,21 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // ✅ 프리플라이트 요청 허용
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // Preflight requests allowed
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
+
+        // Ensures that the custom DaoAuthenticationProvider is used.
+        // In most modern Spring Security setups, if an AuthenticationProvider
+        // is defined as a @Bean, it will be automatically picked up by the
+        // AuthenticationManagerBuilder. You don't usually need configureGlobal
+        // or to explicitly add it here if it's a @Bean.
+        // If you were having issues, you could explicitly add it like this:
+        // http.authenticationProvider(authenticationProvider());
+        // But usually, it's not necessary.
 
         return http.build();
     }
