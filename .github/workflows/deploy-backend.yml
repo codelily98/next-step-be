@@ -6,12 +6,12 @@ on:
             - main
 
 env:
-    PROJECT_ID: next-step-460309 # ⭐ PROJECT_ID를 실제 GCP 프로젝트 ID 'next-step-460309'로 변경합니다.
+    PROJECT_ID: next-step-460309
     AR_HOSTNAME: asia-northeast3-docker.pkg.dev
     AR_REPOSITORY: next-step-docker
     IMAGE_NAME: spring-boot-backend
     VM_INSTANCE_NAME: next-step-backend
-    VM_ZONE: asia-northeast3-c # VM 인스턴스 목록에서 확인된 정확한 Zone
+    VM_ZONE: asia-northeast3-c
     VM_USER: nextstep9898
 
 jobs:
@@ -38,34 +38,31 @@ jobs:
               uses: google-github-actions/auth@v2
               with:
                   credentials_json: ${{ secrets.GCP_SA_KEY }}
+                  export_environment_variables: true
+                  access_token_scopes: https://www.googleapis.com/auth/cloud-platform
 
             - name: Set up Cloud SDK
               uses: google-github-actions/setup-gcloud@v2
               with:
                   project_id: ${{ env.PROJECT_ID }}
 
-            # Docker가 Artifact Registry에 인증할 수 있도록 자격 증명을 구성합니다.
-            - name: Configure Docker to use Artifact Registry as a credential helper
-              run: gcloud auth configure-docker ${AR_HOSTNAME} # ⭐ 여기서 sudo를 제거합니다.
+            - name: Configure Docker to use Artifact Registry
+              run: |
+                  gcloud auth configure-docker ${{ env.AR_HOSTNAME }} --quiet
 
-            # Docker 이미지 빌드 및 푸시 명령: Artifact Registry 경로 사용
-            # 이미지 태그 형식이 'HOSTNAME/PROJECT_ID/REPOSITORY/IMAGE_NAME:TAG'로 변경됩니다.
             - name: Build & Push Docker image to Artifact Registry
               run: |
-                  # ⭐ gcloud auth print-access-token | docker login ... 명령을 제거합니다.
-                  # 위에 Configure Docker 스텝에서 이미 인증이 처리되었습니다.
-                  sudo docker build -t ${AR_HOSTNAME}/${PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}:latest .
-                  sudo docker push ${AR_HOSTNAME}/${PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}:latest
+                  docker build -t ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest .
+                  docker push ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
 
-            # VM 배포 명령: Artifact Registry 이미지 경로 사용
             - name: Deploy to GCP VM using gcloud SSH
               run: |
-                  gcloud compute ssh ${VM_USER}@${VM_INSTANCE_NAME} \
-                    --project=${PROJECT_ID} \
-                    --zone=${VM_ZONE} \
+                  gcloud compute ssh ${{ env.VM_USER }}@${{ env.VM_INSTANCE_NAME }} \
+                    --project=${{ env.PROJECT_ID }} \
+                    --zone=${{ env.VM_ZONE }} \
                     --command="\
-                      sudo docker stop ${IMAGE_NAME} || true && \
-                      sudo docker rm ${IMAGE_NAME} || true && \
-                      sudo docker pull ${AR_HOSTNAME}/${PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}:latest && \
-                      sudo docker run -d --name ${IMAGE_NAME} -p 8080:8080 ${AR_HOSTNAME}/${PROJECT_ID}/${AR_REPOSITORY}/${IMAGE_NAME}:latest \
+                      sudo docker stop ${{ env.IMAGE_NAME }} || true && \
+                      sudo docker rm ${{ env.IMAGE_NAME }} || true && \
+                      sudo docker pull ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest && \
+                      sudo docker run -d --name ${{ env.IMAGE_NAME }} -p 8080:8080 ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest \
                     "
