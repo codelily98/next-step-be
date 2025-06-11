@@ -58,11 +58,12 @@ jobs:
             - name: Deploy to GCP VM using gcloud SSH
               run: |
                   gcloud compute ssh ${{ env.VM_USER }}@${{ env.VM_INSTANCE_NAME }} \
-                    --project=${{ env.PROJECT_ID }} \
-                    --zone=${{ env.VM_ZONE }} \
-                    --command="\
-                      sudo docker stop ${{ env.IMAGE_NAME }} || true && \
-                      sudo docker rm ${{ env.IMAGE_NAME }} || true && \
-                      sudo docker pull ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest && \
-                      sudo docker run -d --name ${{ env.IMAGE_NAME }} -p 8080:8080 ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest \
-                    "
+                  --project=${{ env.PROJECT_ID }} \
+                  --zone=${{ env.VM_ZONE }} \
+                  --command="\
+                  gcloud auth configure-docker ${{ env.AR_HOSTNAME }} --quiet && \
+                  sudo docker stop ${{ env.IMAGE_NAME }} || true && \
+                  sudo docker rm ${{ env.IMAGE_NAME }} || true && \
+                  sudo docker pull ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest && \
+                  sudo docker run -d —name ${{ env.IMAGE_NAME }} -p 8080:8080 ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest \
+                  "
