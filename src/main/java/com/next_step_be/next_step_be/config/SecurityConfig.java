@@ -18,7 +18,6 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.client.endpoint.DefaultAuthorizationCodeTokenResponseClient;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -57,7 +56,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("https://*.portfolio-nextstep.info", "https://portfolio-nextstep.info"));
+        // **수정된 부분: 프론트엔드 도메인을 명확하게 지정**
+        configuration.setAllowedOriginPatterns(List.of("https://portfolio-nextstep.info"));
+        // 만약 로컬 개발 환경에서도 테스트해야 한다면 아래 라인을 추가하세요. (개발 완료 후 제거 권장)
+        // configuration.setAllowedOriginPatterns(List.of("https://portfolio-nextstep.info", "http://localhost:3000"));
+
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Refresh-Token", "X-Requested-With", "Accept"));
         configuration.setAllowCredentials(true);
@@ -71,36 +74,35 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(AbstractHttpConfigurer::disable)
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/api/auth/**", "/login/**", "/oauth2/**").permitAll()
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .anyRequest().authenticated()
-            )
-            .headers(headers -> headers
-        	    .contentSecurityPolicy(csp -> csp
-        	        .policyDirectives(
-        	            "default-src 'self'; " +
-        	            "style-src 'self' https://maxcdn.bootstrapcdn.com https://getbootstrap.com 'unsafe-inline'; " +
-        	            "img-src 'self' data: blob: https://api.portfolio-nextstep.info; " +
-        	            "script-src 'self'; " +
-        	            "object-src 'none'; " +
-        	            "base-uri 'self';"
-        	        )
-        	    )
-        	    .frameOptions(frame -> frame.deny())
-        	    .contentTypeOptions(config -> {})
-        	)
-            .oauth2Login(oauth2 -> oauth2
-                .defaultSuccessUrl("/api/auth/oauth2/success", true)
-                .failureUrl("/api/auth/oauth2/failure")
-            )
-            .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/api/auth/**", "/login/**", "/oauth2/**").permitAll()
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .anyRequest().authenticated()
+                )
+                .headers(headers -> headers
+                        .contentSecurityPolicy(csp -> csp
+                                .policyDirectives(
+                                        "default-src 'self'; " +
+                                                "style-src 'self' https://maxcdn.bootstrapcdn.com https://getbootstrap.com 'unsafe-inline'; " +
+                                                "img-src 'self' data: blob: https://api.portfolio-nextstep.info; " +
+                                                "script-src 'self'; " +
+                                                "object-src 'none'; " +
+                                                "base-uri 'self';"
+                                )
+                        )
+                        .frameOptions(frame -> frame.deny())
+                        .contentTypeOptions(config -> {})
+                )
+                .oauth2Login(oauth2 -> oauth2
+                        .defaultSuccessUrl("/api/auth/oauth2/success", true)
+                        .failureUrl("/api/auth/oauth2/failure")
+                )
+                .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
-    
 }
