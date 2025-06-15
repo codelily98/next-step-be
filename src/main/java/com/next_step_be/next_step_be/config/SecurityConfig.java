@@ -81,12 +81,19 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .headers(headers -> headers
-                .contentSecurityPolicy(csp ->
-                    csp.policyDirectives("default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self';")
-                )
-                .frameOptions(frame -> frame.deny())
-                .contentTypeOptions(config -> {})
-            )
+        	    .contentSecurityPolicy(csp -> csp
+        	        .policyDirectives(
+        	            "default-src 'self'; " +
+        	            "style-src 'self' https://maxcdn.bootstrapcdn.com https://getbootstrap.com 'unsafe-inline'; " +
+        	            "img-src 'self' data: blob: https://api.portfolio-nextstep.info; " +
+        	            "script-src 'self'; " +
+        	            "object-src 'none'; " +
+        	            "base-uri 'self';"
+        	        )
+        	    )
+        	    .frameOptions(frame -> frame.deny())
+        	    .contentTypeOptions(config -> {})
+        	)
             .oauth2Login(oauth2 -> oauth2
                 .defaultSuccessUrl("/api/auth/oauth2/success", true)
                 .failureUrl("/api/auth/oauth2/failure")
