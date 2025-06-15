@@ -6,10 +6,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.util.Optional;
 import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
+import org.springframework.stereotype.Component;
 import org.springframework.web.util.WebUtils;
 import jakarta.servlet.http.Cookie; // jakarta.servlet.http.Cookie 임포트 확인
 
-// OAuth2 인증 요청 관련 상수 정의
+@Component
 public class CookieAuthorizationRequestRepository implements AuthorizationRequestRepository<OAuth2AuthorizationRequest> {
     public static final String OAUTH2_AUTHORIZATION_REQUEST_COOKIE_NAME = "oauth2_auth_request";
     public static final String REDIRECT_URI_PARAM_COOKIE_NAME = "redirect_uri";
