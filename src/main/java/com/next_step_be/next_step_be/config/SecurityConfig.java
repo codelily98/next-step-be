@@ -81,22 +81,25 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // Preflight requests allowed
-                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers("/api/auth/**", "/login/**", "/oauth2/**").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
+            .headers(headers -> headers
+                .contentSecurityPolicy(csp ->
+                    csp.policyDirectives("default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self';")
+                )
+                .frameOptions(frame -> frame.deny())
+                .contentTypeOptions(config -> {})
+            )
+            .oauth2Login(oauth2 -> oauth2
+                .defaultSuccessUrl("/api/auth/oauth2/success", true)
+                .failureUrl("/api/auth/oauth2/failure")
+            )
             .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
-
-        // Ensures that the custom DaoAuthenticationProvider is used.
-        // In most modern Spring Security setups, if an AuthenticationProvider
-        // is defined as a @Bean, it will be automatically picked up by the
-        // AuthenticationManagerBuilder. You don't usually need configureGlobal
-        // or to explicitly add it here if it's a @Bean.
-        // If you were having issues, you could explicitly add it like this:
-        // http.authenticationProvider(authenticationProvider());
-        // But usually, it's not necessary.
 
         return http.build();
     }
+    
 }
