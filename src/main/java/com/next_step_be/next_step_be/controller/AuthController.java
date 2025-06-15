@@ -4,6 +4,8 @@ import com.next_step_be.next_step_be.dto.LoginRequest;
 import com.next_step_be.next_step_be.dto.RegisterRequest;
 import com.next_step_be.next_step_be.dto.TokenResponse;
 import com.next_step_be.next_step_be.service.AuthService;
+import com.next_step_be.next_step_be.service.KakaoAuthService;
+
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +21,8 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
-
+    private final KakaoAuthService kakaoAuthService;
+    
     @PostMapping("/register")
     public ResponseEntity<String> register(@RequestBody RegisterRequest request) {
         log.info("Attempting to register user: {}", request.getUsername());
@@ -95,6 +98,21 @@ public class AuthController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Token refresh failed.");
         }
+    }
+
+    @PostMapping("/kakao/logout")
+    public ResponseEntity<String> kakaoLogout(@RequestHeader("Authorization") String authorizationHeader) {
+        // "Bearer " 접두사를 제거하고 액세스 토큰만 추출
+        String accessToken = authorizationHeader.replace("Bearer ", "");
+        String result = kakaoAuthService.kakaoLogout(accessToken);
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/kakao/unlink")
+    public ResponseEntity<String> kakaoUnlink(@RequestHeader("Authorization") String authorizationHeader) {
+        String accessToken = authorizationHeader.replace("Bearer ", "");
+        String result = kakaoAuthService.kakaoUnlink(accessToken);
+        return ResponseEntity.ok(result);
     }
 
 }
