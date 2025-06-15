@@ -27,11 +27,8 @@ public class OAuth2AuthController {
     private final RedisTemplate<String, String> redisTemplate;
 
     // application.yml에서 프론트엔드 URL을 주입받습니다.
-    @Value("${frontend.oauth2-success-url}")
-    private String frontendSuccessUrl;
-
-    @Value("${frontend.oauth2-failure-url}")
-    private String frontendFailureUrl;
+    @Value("${frontend.oauth2-redirect-url}") // ✅ 이 부분으로 변경
+    private String frontendOAuth2RedirectUrl;
 
     @GetMapping("/success")
     // 반환 타입을 ResponseEntity<?> -> void 로 변경하고 IOException을 던지도록 합니다.
@@ -56,8 +53,7 @@ public class OAuth2AuthController {
             if (id != null) {
                 username = String.valueOf(id);
             } else {
-                // 사용자 이름을 얻을 수 없는 경우 실패 처리 및 프론트엔드 실패 페이지로 리다이렉트
-                response.sendRedirect(frontendFailureUrl + "?error=" + URLEncoder.encode("Kakao user info (email/id) missing", StandardCharsets.UTF_8));
+                response.sendRedirect(frontendOAuth2RedirectUrl + "?error=" + URLEncoder.encode("Kakao user info (email/id) missing", StandardCharsets.UTF_8));
                 return;
             }
         }
@@ -75,8 +71,7 @@ public class OAuth2AuthController {
             redisTemplate.opsForValue().set("refresh:" + username, refreshToken,
                     jwtTokenProvider.getRefreshTokenExpiration(), TimeUnit.MILLISECONDS);
         } else {
-            // Redis 저장 실패 시, 프론트엔드 실패 페이지로 리다이렉트
-            response.sendRedirect(frontendFailureUrl + "?error=" + URLEncoder.encode("Failed to save refresh token (username invalid)", StandardCharsets.UTF_8));
+            response.sendRedirect(frontendOAuth2RedirectUrl + "?error=" + URLEncoder.encode("Failed to save refresh token (username invalid)", StandardCharsets.UTF_8));
             return;
         }
 
@@ -91,13 +86,13 @@ public class OAuth2AuthController {
 
         // **프론트엔드로 리다이렉트**
         // AccessToken을 쿼리 파라미터로 전달하여 프론트엔드가 받도록 합니다.
-        String redirectUrl = frontendSuccessUrl + "?accessToken=" + URLEncoder.encode(accessToken, StandardCharsets.UTF_8);
+        String redirectUrl = frontendOAuth2RedirectUrl + "?accessToken=" + URLEncoder.encode(accessToken, StandardCharsets.UTF_8);
         response.sendRedirect(redirectUrl); // 브라우저를 프론트엔드 URL로 리다이렉트!
     }
 
     @GetMapping("/failure")
     public void onFailure(HttpServletResponse response) throws IOException {
         // 로그인 실패 시 프론트엔드의 실패 페이지로 리다이렉트
-        response.sendRedirect(frontendFailureUrl + "?error=" + URLEncoder.encode("Social login failed", StandardCharsets.UTF_8));
+        response.sendRedirect(frontendOAuth2RedirectUrl + "?error=" + URLEncoder.encode("Social login failed", StandardCharsets.UTF_8));
     }
 }
