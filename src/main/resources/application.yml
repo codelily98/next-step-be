@@ -1,6 +1,6 @@
 server:
   port: 8080 # Spring Boot 애플리케이션이 실행될 포트
-  orward-headers-strategy: framework # ✅ 이 설정 추가
+  forward-headers-strategy: framework # ✅ 이 설정 추가
 
 spring:
   datasource:
