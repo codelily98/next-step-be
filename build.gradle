@@ -41,6 +41,9 @@ dependencies {
 	
 	// OAuth2 클라이언트 (소셜 로그인용)
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    
+    // frontend라는 새로운 최상위 속성 오류 무시
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
 	// 개발용
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
