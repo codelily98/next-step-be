@@ -4,25 +4,22 @@ import com.next_step_be.next_step_be.dto.LoginRequest;
 import com.next_step_be.next_step_be.dto.RegisterRequest;
 import com.next_step_be.next_step_be.dto.TokenResponse;
 import com.next_step_be.next_step_be.service.AuthService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-@Slf4j // Lombok 로깅
-@RestController // RESTful 웹 서비스 컨트롤러
-@RequestMapping("/api/auth") // 기본 URL 경로 설정
-@RequiredArgsConstructor // final 필드를 위한 생성자 자동 생성
+@Slf4j
+@RestController
+@RequestMapping("/api/auth")
+@RequiredArgsConstructor
 public class AuthController {
 
-    private final AuthService authService; // 인증 비즈니스 로직 서비스
+    private final AuthService authService;
 
-    // 회원가입 API
     @PostMapping("/register")
     public ResponseEntity<String> register(@RequestBody RegisterRequest request) {
         log.info("Attempting to register user: {}", request.getUsername());
@@ -39,50 +36,65 @@ public class AuthController {
         }
     }
 
-    // 로그인 API
     @PostMapping("/login")
-    public ResponseEntity<TokenResponse> login(@RequestBody LoginRequest request) {
-        log.info("Attempting to log in user: {}", request.getUsername());
-        try {
-            TokenResponse tokenResponse = authService.login(request);
-            log.info("User {} logged in successfully, tokens issued.", request.getUsername());
-            return ResponseEntity.ok(tokenResponse);
-        } catch (Exception e) {
-            log.error("Login failed for user {}: {}", request.getUsername(), e.getMessage(), e);
-            // 인증 실패 시 (비밀번호 불일치, 사용자 없음 등) BadCredentialsException 발생
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build(); // 401 Unauthorized
-        }
+    public ResponseEntity<TokenResponse> login(@RequestBody LoginRequest request, HttpServletResponse response) {
+        TokenResponse tokenResponse = authService.login(request);
+
+        Cookie refreshTokenCookie = new Cookie("refreshToken", tokenResponse.getRefreshToken());
+        refreshTokenCookie.setHttpOnly(true);
+        refreshTokenCookie.setSecure(true);
+        refreshTokenCookie.setPath("/");
+        refreshTokenCookie.setMaxAge((int) (authService.getRefreshTokenExpiration() / 1000));
+        response.addCookie(refreshTokenCookie);
+
+        return ResponseEntity.ok(new TokenResponse(tokenResponse.getAccessToken(), null));
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<?> logout(@RequestHeader("Authorization") String accessTokenHeader,
-                                   @RequestHeader("Refresh-Token") String refreshToken) {
-        // "Bearer " 접두사 제거
+    public ResponseEntity<?> logout(
+            @RequestHeader("Authorization") String accessTokenHeader,
+            @CookieValue(value = "refreshToken", required = false) String refreshToken,
+            HttpServletResponse response) {
+
         String accessToken = null;
         if (accessTokenHeader != null && accessTokenHeader.startsWith("Bearer ")) {
             accessToken = accessTokenHeader.substring(7);
-        } else {
-            return ResponseEntity.badRequest().body("Access Token is missing or malformed.");
+        }
+
+        if (accessToken == null || refreshToken == null) {
+            return ResponseEntity.badRequest().body("AccessToken 또는 RefreshToken이 없습니다.");
         }
 
         boolean loggedOut = authService.logout(accessToken, refreshToken);
-        if (loggedOut) {
-            return ResponseEntity.ok("Logout successful.");
-        } else {
-            return ResponseEntity.badRequest().body("Logout failed or token not found.");
-        }
+
+        Cookie cookie = new Cookie("refreshToken", null);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(true);
+        cookie.setPath("/");
+        cookie.setMaxAge(0);
+        response.addCookie(cookie);
+
+        return loggedOut ?
+                ResponseEntity.ok("Logout successful.") :
+                ResponseEntity.badRequest().body("Logout failed or token not found.");
     }
     
-    // (선택 사항) 테스트용 API (인증 필요)
-    // @GetMapping("/test")
-    // @PreAuthorize("hasRole('USER')") // USER 권한 필요
-    // public ResponseEntity<String> testEndpoint() {
-    //     return ResponseEntity.ok("This is a protected endpoint! You are authenticated.");
-    // }
-    //
-    // @GetMapping("/admin/test")
-    // @PreAuthorize("hasRole('ADMIN')") // ADMIN 권한 필요
-    // public ResponseEntity<String> adminTestEndpoint() {
-    //     return ResponseEntity.ok("This is an ADMIN-only endpoint!");
-    // }
+    @PostMapping("/refresh-token")
+    public ResponseEntity<?> refreshToken(
+            @CookieValue(name = "refreshToken", required = false) String refreshToken) {
+
+        if (refreshToken == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Refresh Token is missing.");
+        }
+
+        try {
+            String newAccessToken = authService.refreshAccessToken(refreshToken);
+            return ResponseEntity.ok(new TokenResponse(newAccessToken, null));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Token refresh failed.");
+        }
+    }
+
 }
