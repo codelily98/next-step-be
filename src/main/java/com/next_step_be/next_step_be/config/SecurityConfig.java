@@ -69,12 +69,6 @@ public class SecurityConfig {
     }
 
     @Bean
-    public DefaultAuthorizationCodeTokenResponseClient authorizationCodeTokenResponseClient() {
-        // 기본 설정만으로 client_secret_post 지원됨
-        return new DefaultAuthorizationCodeTokenResponseClient();
-    }
-
-    @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
@@ -94,9 +88,6 @@ public class SecurityConfig {
                 .contentTypeOptions(config -> {})
             )
             .oauth2Login(oauth2 -> oauth2
-                .tokenEndpoint(token -> token
-                    .accessTokenResponseClient(authorizationCodeTokenResponseClient())
-                )
                 .defaultSuccessUrl("/api/auth/oauth2/success", true)
                 .failureUrl("/api/auth/oauth2/failure")
             )
@@ -104,4 +95,5 @@ public class SecurityConfig {
 
         return http.build();
     }
+    
 }
