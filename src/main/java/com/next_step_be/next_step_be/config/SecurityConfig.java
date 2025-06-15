@@ -53,11 +53,8 @@ public class SecurityConfig {
     private final RedisTemplate<String, String> redisTemplate; // ✅ RedisTemplate 주입 추가
 
     // ✅ 프론트엔드 URL 주입 추가
-    @Value("${frontend.oauth2-success-url}")
-    private String frontendSuccessUrl;
-
-    @Value("${frontend.oauth2-failure-url}")
-    private String frontendFailureUrl;
+    @Value("${frontend.oauth2-redirect-url}") // 새로운 속성 이름 사용을 권장합니다.
+    private String frontendOAuth2RedirectUrl;
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
@@ -106,23 +103,19 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authorize -> authorize
-                .requestMatchers("/api/auth/**", "/login/oauth2/**", "/oauth2/**").permitAll() // OAuth2 관련 경로 허용
+                .requestMatchers("/api/auth/**", "/login/oauth2/**", "/oauth2/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/register").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth2 -> oauth2
                 .authorizationEndpoint(authorization -> authorization
-                    .baseUri("/oauth2/authorization") // OAuth2 로그인 시작 URL
-                    .authorizationRequestRepository(cookieAuthorizationRequestRepository) // ✅ 커스텀 리포지토리 설정
+                    .baseUri("/oauth2/authorization")
+                    .authorizationRequestRepository(cookieAuthorizationRequestRepository)
                 )
                 .redirectionEndpoint(redirection -> redirection
-                    .baseUri("/login/oauth2/code/*") // 카카오에서 리다이렉트될 URL 패턴
+                    .baseUri("/login/oauth2/code/*")
                 )
                 .successHandler((request, response, authentication) -> {
-                    // ✅ 기존 OAuth2AuthController.onSuccess의 로직을 여기에 직접 구현합니다.
-                    // 이 람다 내부에서 IOException이 발생할 수 있으므로, 람다의 선언부에는 `throws IOException`이 필요합니다.
-                    // (함수형 인터페이스 정의에 따라 자동으로 처리되거나, 람다 내부에서 try-catch 블록으로 감싸야 함)
-                    // Spring Security의 successHandler는 ServletOutputStream을 사용하므로, IOException을 던져도 괜찮습니다.
                     try {
                         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
 
@@ -134,18 +127,19 @@ public class SecurityConfig {
                                 username = (String) kakaoAccount.get("email");
                             }
                         }
-                        
+
                         if (username == null || username.isEmpty()) {
                             Object id = oAuth2User.getAttribute("id");
                             if (id != null) {
                                 username = String.valueOf(id);
                             } else {
-                                response.sendRedirect(frontendFailureUrl + "?error=" + URLEncoder.encode("Kakao user info (email/id) missing", StandardCharsets.UTF_8));
+                                // 실패 시에도 동일한 frontendOAuth2RedirectUrl 사용
+                                response.sendRedirect(frontendOAuth2RedirectUrl + "?error=" + URLEncoder.encode("Kakao user info (email/id) missing", StandardCharsets.UTF_8));
                                 return;
                             }
                         }
 
-                        String role = "ROLE_USER"; // 기본 USER 권한 부여
+                        String role = "ROLE_USER";
 
                         UsernamePasswordAuthenticationToken authToken =
                             new UsernamePasswordAuthenticationToken(username, null, List.of(new SimpleGrantedAuthority(role)));
@@ -153,44 +147,38 @@ public class SecurityConfig {
                         String accessToken = jwtTokenProvider.generateToken(authToken, false);
                         String refreshToken = jwtTokenProvider.generateToken(authToken, true);
 
-                        // RefreshToken Redis 저장 (username 유효성 검사 추가)
                         if (username != null && !username.isEmpty()) {
                             redisTemplate.opsForValue().set("refresh:" + username, refreshToken,
                                     jwtTokenProvider.getRefreshTokenExpiration(), TimeUnit.MILLISECONDS);
                         } else {
-                            response.sendRedirect(frontendFailureUrl + "?error=" + URLEncoder.encode("Failed to save refresh token (username invalid)", StandardCharsets.UTF_8));
+                            // 실패 시에도 동일한 frontendOAuth2RedirectUrl 사용
+                            response.sendRedirect(frontendOAuth2RedirectUrl + "?error=" + URLEncoder.encode("Failed to save refresh token (username invalid)", StandardCharsets.UTF_8));
                             return;
                         }
 
-                        // RefreshToken 쿠키 저장
                         Cookie cookie = new Cookie("refreshToken", refreshToken);
                         cookie.setHttpOnly(true);
-                        // HTTPS 운영 환경에서는 true로 설정해야 합니다. (로컬 HTTP 개발 시에는 false일 수 있음)
-                        cookie.setSecure(true); // 배포 환경에선 반드시 true로 설정!
+                        cookie.setSecure(true);
                         cookie.setPath("/");
                         cookie.setMaxAge((int) (jwtTokenProvider.getRefreshTokenExpiration() / 1000));
                         response.addCookie(cookie);
 
-                        // 프론트엔드로 리다이렉트
-                        // AccessToken을 쿼리 파라미터로 전달하여 프론트엔드가 받도록 합니다.
-                        String redirectUrl = frontendSuccessUrl + "?accessToken=" + URLEncoder.encode(accessToken, StandardCharsets.UTF_8);
+                        // 성공 시에도 동일한 frontendOAuth2RedirectUrl 사용
+                        String redirectUrl = frontendOAuth2RedirectUrl + "?accessToken=" + URLEncoder.encode(accessToken, StandardCharsets.UTF_8);
                         response.sendRedirect(redirectUrl);
 
-                        // 쿠키에 저장된 AuthorizationRequest 정보 삭제
                         cookieAuthorizationRequestRepository.removeAuthorizationRequestCookies(request, response);
 
                     } catch (IOException e) {
-                        // 예외 발생 시 에러 로깅 또는 추가 처리
                         System.err.println("Error in OAuth2 successHandler: " + e.getMessage());
-                        // 필요하다면 실패 페이지로 리다이렉트
-                        response.sendRedirect(frontendFailureUrl + "?error=" + URLEncoder.encode("Internal server error during login", StandardCharsets.UTF_8));
+                        response.sendRedirect(frontendOAuth2RedirectUrl + "?error=" + URLEncoder.encode("Internal server error during login", StandardCharsets.UTF_8));
                     }
                 })
                 .failureHandler((request, response, exception) -> {
-                    // ✅ 기존 OAuth2AuthController.onFailure의 로직을 여기에 구현
                     try {
                         String errorMessage = exception.getMessage() != null ? exception.getMessage() : "Authentication failed";
-                        response.sendRedirect(frontendFailureUrl + "?error=" + URLEncoder.encode(errorMessage, StandardCharsets.UTF_8));
+                        // ✅ 실패 시 frontendOAuth2RedirectUrl로 리다이렉트
+                        response.sendRedirect(frontendOAuth2RedirectUrl + "?error=" + URLEncoder.encode(errorMessage, StandardCharsets.UTF_8));
                     } catch (IOException e) {
                         System.err.println("Error in OAuth2 failureHandler: " + e.getMessage());
                     }
