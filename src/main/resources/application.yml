@@ -1,6 +1,6 @@
 server:
-  port: 8080 # Spring Boot 애플리케이션이 실행될 포트
-  forward-headers-strategy: framework # ✅ 이 설정 추가
+  port: 8080
+  forward-headers-strategy: framework
 
 spring:
   datasource:
@@ -10,31 +10,30 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: update # 개발 단계에서만 사용. 운영 시에는 none 또는 validate 권장
-    show-sql: true # JPA 쿼리 로그 출력
+      ddl-auto: update
+    show-sql: true
     properties:
       hibernate:
-        format_sql: true # SQL 쿼리 포매팅
+        format_sql: true
   data:
     redis:
       host: 34.47.124.61
       port: 6379
       password: nextstep98
-      timeout: 5000ms # 연결 타임아웃 5초 (기본값보다 길게 설정하여 안정성 확보)
+      timeout: 5000ms
       lettuce:
         pool:
-          max-active: 8 # 최대 활성 연결 수
-          min-idle: 0   # 최소 유휴 연결 수
-          max-idle: 8   # 최대 유휴 연결 수
-          max-wait: 10000ms # 풀에서 연결을 대기하는 최대 시간
+          max-active: 8
+          min-idle: 0
+          max-idle: 8
+          max-wait: 10000ms
   security:
     oauth2:
       client:
         registration:
           kakao:
             client-id: 5fba457f416463d2a865286e249f2cd0
-            # 카카오 개발자 센터에 등록된 리다이렉트 URI와 정확히 일치해야 합니다.
-            redirect-uri: "https://api.portfolio-nextstep.info/login/oauth2/code/kakao"
+            redirect-uri: "https://api.portfolio-nextstep.info/login/oauth2/code/kakao" # 카카오 개발자 콘솔에 등록된 URI와 일치해야 함
             authorization-grant-type: authorization_code
             client-authentication-method: client_secret_post
             scope:
@@ -49,15 +48,14 @@ spring:
             user-name-attribute: id
 jwt:
   secret: pF4ORt/xd3Ym0UHiJwijgtnYHyNd5B7xQKzSxsWnp5M=
-  expiration: 86400000 # Access Token 만료 시간 (24시간, 밀리초)
-  refresh_expiration: 604800000 # Refresh Token 만료 시간 (7일, 밀리초)
+  expiration: 86400000
+  refresh_expiration: 604800000
 
 # --- 카카오 로그인 리다이렉트 문제 해결을 위한 추가 설정 (프론트엔드 URL) ---
 frontend:
-  oauth2-success-url: https://portfolio-nextstep.info/oauth2/callback # 카카오 로그인 성공 후 프론트엔드로 리다이렉트될 실제 URL
-  oauth2-failure-url: https://portfolio-nextstep.info/oauth2/failure # 카카오 로그인 실패 후 프론트엔드로 리다이렉트될 실제 URL
+  # ✅ 성공/실패 시 모두 이 URL로 리다이렉트되도록 단일 속성 사용
+  oauth2-redirect-url: https://portfolio-nextstep.info/oauth2/redirect
 
 # 개발 환경에서 로컬 테스트를 진행할 경우 아래 주석을 해제하여 사용할 수 있습니다.
 # frontend:
-#   oauth2-success-url: http://localhost:5173/oauth2/callback
-#   oauth2-failure-url: http://localhost:5173/oauth2/failure
+#   oauth2-redirect-url: http://localhost:5173/oauth2/redirect
