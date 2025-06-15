@@ -18,6 +18,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.client.endpoint.DefaultAuthorizationCodeTokenResponseClient;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -34,20 +35,15 @@ public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomUserDetailsService customUserDetailsService;
-    // Removed @Autowired configureGlobal method as it's deprecated and caused circular reference.
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
         authProvider.setUserDetailsService(customUserDetailsService);
-        // PasswordEncoder bean is correctly referenced here.
         authProvider.setPasswordEncoder(passwordEncoder());
         return authProvider;
     }
 
-    // AuthenticationManager Bean registration (for AuthService)
-    // This correctly gets the AuthenticationManager from the Configuration,
-    // which will use the registered DaoAuthenticationProvider.
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
         return configuration.getAuthenticationManager();
@@ -61,8 +57,6 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // It's generally better to use specific origins instead of patterns if possible
-        // but given the .info domain, patterns might be necessary.
         configuration.setAllowedOriginPatterns(List.of("https://*.portfolio-nextstep.info", "https://portfolio-nextstep.info"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Refresh-Token", "X-Requested-With", "Accept"));
@@ -72,6 +66,12 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
+    }
+
+    @Bean
+    public DefaultAuthorizationCodeTokenResponseClient authorizationCodeTokenResponseClient() {
+        // 기본 설정만으로 client_secret_post 지원됨
+        return new DefaultAuthorizationCodeTokenResponseClient();
     }
 
     @Bean
@@ -94,6 +94,9 @@ public class SecurityConfig {
                 .contentTypeOptions(config -> {})
             )
             .oauth2Login(oauth2 -> oauth2
+                .tokenEndpoint(token -> token
+                    .accessTokenResponseClient(authorizationCodeTokenResponseClient())
+                )
                 .defaultSuccessUrl("/api/auth/oauth2/success", true)
                 .failureUrl("/api/auth/oauth2/failure")
             )
@@ -101,5 +104,4 @@ public class SecurityConfig {
 
         return http.build();
     }
-    
 }
