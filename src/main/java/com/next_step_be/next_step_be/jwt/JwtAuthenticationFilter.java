@@ -69,7 +69,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                         log.info("♻️ AccessToken + RefreshToken 재발급 완료 - user: {}", username);
                     } else {
-                        log.warn("❌ Redis에 저장된 RefreshToken과 일치하지 않음");
+                        log.warn("❌ Redis에 저장된 RefreshToken과 일치하지 않음. 강제 로그아웃 처리. user: {}", username);
+                        redisTemplate.delete("refresh:" + username); // Redis에서 해당 유저의 리프레시 토큰 삭제
+                        // 기존 리프레시 토큰 쿠키 무효화
+                        Cookie invalidCookie = new Cookie("refreshToken", null);
+                        invalidCookie.setHttpOnly(true);
+                        invalidCookie.setSecure(true);
+                        invalidCookie.setPath("/");
+                        invalidCookie.setMaxAge(0); // 쿠키 즉시 만료
+                        response.addCookie(invalidCookie);
+
+                        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid Refresh Token. Please log in again.");
+                        return; // 필터 체인 중단
                     }
                 } else {
                     log.warn("❌ RefreshToken이 유효하지 않음");
