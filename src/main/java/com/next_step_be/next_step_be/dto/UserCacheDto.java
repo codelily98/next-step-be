@@ -12,4 +12,5 @@ public class UserCacheDto {
 	private String username;
     private String nickname;
     private Role role;
+    private String profileImageUrl;
 }

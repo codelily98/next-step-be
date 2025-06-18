@@ -55,11 +55,12 @@ public class AuthService {
         String generatedNickname = "user" + (userCount + 1);
 
         User user = User.builder()
-                .username(request.getUsername())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .role(Role.USER)
-                .nickname(generatedNickname)
-                .build();
+        	    .username(request.getUsername())
+        	    .password(passwordEncoder.encode(request.getPassword()))
+        	    .role(Role.USER)
+        	    .nickname(generatedNickname)
+        	    .profileImageUrl("https://storage.googleapis.com/next-step-assets/uploads/default.png") // 기본값 (또는 default 이미지 경로)
+        	    .build();
 
         return userRepository.save(user);
     }
@@ -83,7 +84,12 @@ public class AuthService {
         User user = userRepository.findByUsername(request.getUsername())
                 .orElseThrow(() -> new IllegalArgumentException("사용자 없음"));
 
-        UserCacheDto userCache = new UserCacheDto(user.getUsername(), user.getNickname(), user.getRole());
+        UserCacheDto userCache = new UserCacheDto(
+        	    user.getUsername(),
+        	    user.getNickname(),
+        	    user.getRole(),
+        	    user.getProfileImageUrl()
+        	);
 
         String userKey = "user:" + user.getUsername();
         redisTemplate.opsForValue().set(userKey, toJson(userCache), 7, TimeUnit.DAYS);
