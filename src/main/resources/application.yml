@@ -1,11 +1,8 @@
 spring:
-  config:
-    import: optional:env[.env]
-
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    url: jdbc:mysql://34.64.182.217:3306/nextstep?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: nextstep98
+    password: Rlaxogns98*
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -18,9 +15,9 @@ spring:
 
   data:
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
-      password: ${REDIS_PASSWORD}
+      host: 34.47.124.61
+      port: 6379
+      password: nextstep98
       timeout: 5000ms
       lettuce:
         pool:
@@ -34,7 +31,7 @@ spring:
       client:
         registration:
           kakao:
-            client-id: ${KAKAO_CLIENT_ID}
+            client-id: 5fba457f416463d2a865286e249f2cd0
             redirect-uri: "https://api.portfolio-nextstep.info/login/oauth2/code/kakao"
             authorization-grant-type: authorization_code
             client-authentication-method: client_secret_post
@@ -54,18 +51,18 @@ server:
   forward-headers-strategy: framework
 
 jwt:
-  secret: ${JWT_SECRET}
-  expiration: ${JWT_EXPIRATION}
-  refresh_expiration: ${JWT_REFRESH_EXPIRATION}
+  secret: pF4ORt/xd3Ym0UHiJwijgtnYHyNd5B7xQKzSxsWnp5M=
+  expiration: 86400000
+  refresh_expiration: 604800000
 
 frontend:
-  oauth2-redirect-url: ${FRONTEND_REDIRECT_URL}
+  oauth2-redirect-url: https://portfolio-nextstep.info/oauth2/redirect
 
 gcp:
-  project-id: ${GCP_PROJECT_ID}
-  bucket: ${GCP_BUCKET}
-  upload-path: ${GCP_UPLOAD_PATH}
+  project-id: next-step
+  bucket: next-step-assets
+  upload-path: uploads/
 
 custom:
   kakao:
-    admin-key: ${KAKAO_ADMIN_KEY}
+    admin-key: 95e93a3588a0d8a60b1c0f6e54a920c9
