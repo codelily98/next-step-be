@@ -1,20 +1,21 @@
-# 사용할 Java 런타임 이미지 (여기서는 OpenJDK 17을 slim 버전으로 사용)
+# 1. 사용할 Java 런타임 이미지
 FROM openjdk:17-jdk-slim
 
-# Docker 이미지 내부에 컨테이너가 사용할 작업 디렉토리를 설정
+# 2. 작업 디렉토리 설정
 WORKDIR /app
 
-# Gradle 또는 Maven 빌드 결과물의 경로를 설정 (프로젝트에 맞게 수정)
-# Maven 사용 시: target/*.jar
-# Gradle 사용 시: build/libs/*.jar
+# 3. JAR 파일 복사 (Gradle 기준)
 ARG JAR_FILE=build/libs/*.jar
-
-# 로컬에서 빌드된 JAR 파일을 컨테이너의 /app 디렉토리로 복사
 COPY ${JAR_FILE} app.jar
 
-# Spring Boot 애플리케이션의 기본 포트 노출 (선택 사항, 문서화 목적)
+# 4. 서비스 계정 키 파일 복사 (빌드 시 함께 전달)
+COPY gcp-service-key.json /app/gcp-service-key.json
+
+# 5. 환경 변수 설정 (GCP 인증)
+ENV GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-service-key.json
+
+# 6. 포트 노출 (문서 목적)
 EXPOSE 8080
 
-# 컨테이너 시작 시 실행될 명령어
-# java -jar 명령어로 Spring Boot 애플리케이션을 실행
+# 7. 실행 명령어
 ENTRYPOINT ["java", "-jar", "app.jar"]
