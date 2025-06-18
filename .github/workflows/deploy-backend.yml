@@ -127,9 +127,9 @@ jobs:
           docker build -t ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest .
           docker push ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
 
-      - name: Upload GCP service account key to VM
+      - name: Decode GCP Service Account Key (base64) and save as file
         run: |
-          printf "%s" "${{ secrets.GCP_SA_KEY }}" > gcp-key.json
+          echo "${{ secrets.GCP_SA_KEY }}" | base64 -d > gcp-key.json
           gcloud compute ssh ${{ env.VM_USER }}@${{ env.VM_INSTANCE_NAME }} \
             --zone=${{ env.VM_ZONE }} --tunnel-through-iap --quiet \
             --command="mkdir -p /home/${{ env.VM_USER }}/keys"
