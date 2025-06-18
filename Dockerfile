@@ -5,8 +5,7 @@ FROM openjdk:17-jdk-slim
 WORKDIR /app
 
 # 3. JAR 복사
-ARG JAR_FILE=build/libs/*.jar
-COPY ${JAR_FILE} app.jar
+COPY build/libs/app.jar app.jar
 
 # 4. 포트 노출
 EXPOSE 8080
