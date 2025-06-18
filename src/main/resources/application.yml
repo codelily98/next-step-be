@@ -49,6 +49,11 @@ spring:
 server:
   port: 8080
   forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        same-site: none
+        secure: true
 
 jwt:
   secret: pF4ORt/xd3Ym0UHiJwijgtnYHyNd5B7xQKzSxsWnp5M=
