@@ -55,6 +55,11 @@ jwt:
 frontend:
   # ✅ 성공/실패 시 모두 이 URL로 리다이렉트되도록 단일 속성 사용
   oauth2-redirect-url: https://portfolio-nextstep.info/oauth2/redirect
+gcp:
+  project-id: next-step
+  bucket: next-step-assets
+  upload-path: uploads/
+
 
 # 개발 환경에서 로컬 테스트를 진행할 경우 아래 주석을 해제하여 사용할 수 있습니다.
 # frontend:

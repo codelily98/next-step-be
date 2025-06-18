@@ -51,10 +51,14 @@ public class AuthService {
             throw new IllegalArgumentException("이미 존재하는 사용자 이름입니다.");
         }
 
+        long userCount = userRepository.count();
+        String generatedNickname = "user" + (userCount + 1);
+
         User user = User.builder()
                 .username(request.getUsername())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(Role.USER)
+                .nickname(generatedNickname)
                 .build();
 
         return userRepository.save(user);
@@ -78,7 +82,8 @@ public class AuthService {
         // 🔹 사용자 정보 Redis 캐싱 (7일 고정 TTL)
         User user = userRepository.findByUsername(request.getUsername())
                 .orElseThrow(() -> new IllegalArgumentException("사용자 없음"));
-        UserCacheDto userCache = new UserCacheDto(user.getUsername(), user.getRole());
+
+        UserCacheDto userCache = new UserCacheDto(user.getUsername(), user.getNickname(), user.getRole());
 
         String userKey = "user:" + user.getUsername();
         redisTemplate.opsForValue().set(userKey, toJson(userCache), 7, TimeUnit.DAYS);

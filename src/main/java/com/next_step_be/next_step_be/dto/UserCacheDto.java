@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserCacheDto {
-    private String username;
+	private String username;
+    private String nickname;
     private Role role;
 }

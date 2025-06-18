@@ -34,6 +34,20 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private Role role; // 사용자 권한 (USER, ADMIN)
 
+    @Column(length = 15, nullable = true, unique = true)
+    private String nickname; // ✅ 닉네임 (중복 검사 대상)
+
+    @Column(nullable = true)
+    private String profileImageUrl; // ✅ 프로필 이미지 (선택)
+
+    // UserDetails 구현 생략 동일
+
+    // ✅ 닉네임 및 프로필 업데이트 메서드
+    public void updateProfile(String nickname, String profileImageUrl) {
+        this.nickname = nickname;
+        this.profileImageUrl = profileImageUrl;
+    }
+    
     // UserDetails 인터페이스 구현
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
