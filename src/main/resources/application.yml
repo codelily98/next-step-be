@@ -62,6 +62,8 @@ gcp:
   project-id: next-step-460309
   bucket: next-step-assets
   upload-path: uploads/
+  credentials:
+    path: /app/keys/gcp-key.json
 
 custom:
   kakao:
