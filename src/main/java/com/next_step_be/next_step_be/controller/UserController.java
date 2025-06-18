@@ -2,7 +2,6 @@ package com.next_step_be.next_step_be.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.next_step_be.next_step_be.domain.User;
-import com.next_step_be.next_step_be.dto.UpdateProfileRequest;
 import com.next_step_be.next_step_be.dto.UserCacheDto;
 import com.next_step_be.next_step_be.dto.UserResponse;
 import com.next_step_be.next_step_be.jwt.JwtTokenProvider;

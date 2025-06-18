@@ -17,6 +17,7 @@ public class UserService {
     private final UserRepository userRepository;
 
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    
     private static final String[] ALLOWED_FILE_TYPES = {
             "image/jpeg", "image/png", "image/webp", "image/gif"
     };
@@ -24,6 +25,7 @@ public class UserService {
     public boolean nicknameExists(String nickname) {
         return userRepository.existsByNickname(nickname);
     }
+
 
     public void updateProfile(String username, String nickname, MultipartFile profileImage) {
         // 사용자 조회
@@ -40,7 +42,7 @@ public class UserService {
         }
 
         // 프로필 이미지 처리
-        String imageUrl = user.getProfileImageUrl();
+        String imageUrl = user.getProfileImageUrl(); // 기존 이미지 URL 유지
         if (profileImage != null && !profileImage.isEmpty()) {
             // 파일 형식과 크기 검증
             if (!isValidFileType(profileImage.getContentType())) {
