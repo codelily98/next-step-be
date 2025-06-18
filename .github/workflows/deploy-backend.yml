@@ -129,7 +129,7 @@ jobs:
 
       - name: Upload GCP service account key to VM
         run: |
-          echo "${{ secrets.GCP_SA_KEY }}" > gcp-key.json
+          printf "%s" "${{ secrets.GCP_SA_KEY }}" > gcp-key.json
           gcloud compute ssh ${{ env.VM_USER }}@${{ env.VM_INSTANCE_NAME }} \
             --zone=${{ env.VM_ZONE }} --tunnel-through-iap --quiet \
             --command="mkdir -p /home/${{ env.VM_USER }}/keys"
