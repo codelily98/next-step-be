@@ -8,7 +8,7 @@ WORKDIR /app
 # Maven 사용 시: target/*.jar
 # Gradle 사용 시: build/libs/*.jar
 # 로컬에서 빌드된 JAR 파일을 컨테이너의 /app 디렉토리로 복사
-COPY build/libs/next-step-be-0.0.1-SNAPSHOT.jar app.jar
+COPY build/libs/*.jar app.jar
 
 # Spring Boot 애플리케이션의 기본 포트 노출 (선택 사항, 문서화 목적)
 EXPOSE 8080
