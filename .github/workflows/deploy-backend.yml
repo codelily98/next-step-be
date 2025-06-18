@@ -138,18 +138,16 @@ jobs:
 
       - name: Deploy to GCP VM using gcloud SSH
         run: |
-          gcloud compute ssh ${{ env.VM_USER }}@${{ env.VM_INSTANCE_NAME }} \
+            gcloud compute ssh ${{ env.VM_USER }}@${{ env.VM_INSTANCE_NAME }} \
             --project=${{ env.PROJECT_ID }} \
             --zone=${{ env.VM_ZONE }} \
             --tunnel-through-iap \
-            --command="\
-              gcloud auth configure-docker ${{ env.AR_HOSTNAME }} --quiet && \
-              gcloud auth print-access-token | sudo docker login -u oauth2accesstoken --password-stdin https://${{ env.AR_HOSTNAME }} && \
-              sudo docker pull ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest && \
-              sudo docker stop ${{ env.IMAGE_NAME }} || true && \
-              sudo docker rm ${{ env.IMAGE_NAME }} || true && \
-              sudo docker run -d --name ${{ env.IMAGE_NAME }} -p 8080:8080 \
-              -e GOOGLE_APPLICATION_CREDENTIALS=/app/keys/gcp-key.json \
-              -v /home/${{ env.VM_USER }}/keys/gcp-key.json:/app/keys/gcp-key.json \
-              ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
-
+            --command="gcloud auth configure-docker ${{ env.AR_HOSTNAME }} --quiet && \
+            gcloud auth print-access-token | sudo docker login -u oauth2accesstoken --password-stdin https://${{ env.AR_HOSTNAME }} && \
+            sudo docker pull ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest && \
+            sudo docker stop ${{ env.IMAGE_NAME }} || true && \
+            sudo docker rm ${{ env.IMAGE_NAME }} || true && \
+            sudo docker run -d --name ${{ env.IMAGE_NAME }} -p 8080:8080 \
+            -e GOOGLE_APPLICATION_CREDENTIALS=/app/keys/gcp-key.json \
+            -v /home/${{ env.VM_USER }}/keys/gcp-key.json:/app/keys/gcp-key.json \
+            ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest"
