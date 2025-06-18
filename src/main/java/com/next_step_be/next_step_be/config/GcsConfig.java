@@ -13,11 +13,7 @@ public class GcsConfig {
 
     @Bean
     public Storage storage() throws Exception {
-        String credentialsPath = System.getenv("GOOGLE_APPLICATION_CREDENTIALS");
-
-        if (credentialsPath == null || credentialsPath.isBlank()) {
-            throw new IllegalStateException("환경 변수 GOOGLE_APPLICATION_CREDENTIALS가 설정되지 않았습니다.");
-        }
+        String credentialsPath = "/app/keys/gcp-key.json";
 
         return StorageOptions.newBuilder()
                 .setCredentials(GoogleCredentials.fromStream(new FileInputStream(credentialsPath)))
