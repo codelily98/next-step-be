@@ -4,10 +4,11 @@ server:
 
 spring:
   datasource:
-    url: jdbc:mysql://34.64.182.217:3306/nextstep?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: nextstep98
-    password: Rlaxogns98*
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -15,11 +16,12 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
   data:
     redis:
-      host: 34.47.124.61
-      port: 6379
-      password: nextstep98
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
       timeout: 5000ms
       lettuce:
         pool:
@@ -27,13 +29,14 @@ spring:
           min-idle: 0
           max-idle: 8
           max-wait: 10000ms
+
   security:
     oauth2:
       client:
         registration:
           kakao:
-            client-id: 5fba457f416463d2a865286e249f2cd0
-            redirect-uri: "https://api.portfolio-nextstep.info/login/oauth2/code/kakao" # 카카오 개발자 콘솔에 등록된 URI와 일치해야 함
+            client-id: ${KAKAO_CLIENT_ID}
+            redirect-uri: "https://api.portfolio-nextstep.info/login/oauth2/code/kakao"
             authorization-grant-type: authorization_code
             client-authentication-method: client_secret_post
             scope:
@@ -46,21 +49,17 @@ spring:
             token-uri: https://kauth.kakao.com/oauth/token
             user-info-uri: https://kapi.kakao.com/v2/user/me
             user-name-attribute: id
+            admin-key: ${KAKAO_ADMIN_KEY} # 환경변수 주입
+
 jwt:
-  secret: pF4ORt/xd3Ym0UHiJwijgtnYHyNd5B7xQKzSxsWnp5M=
-  expiration: 86400000
-  refresh_expiration: 604800000
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}
+  refresh_expiration: ${JWT_REFRESH_EXPIRATION}
 
-# --- 카카오 로그인 리다이렉트 문제 해결을 위한 추가 설정 (프론트엔드 URL) ---
 frontend:
-  # ✅ 성공/실패 시 모두 이 URL로 리다이렉트되도록 단일 속성 사용
-  oauth2-redirect-url: https://portfolio-nextstep.info/oauth2/redirect
+  oauth2-redirect-url: ${FRONTEND_REDIRECT_URL}
+
 gcp:
-  project-id: next-step
-  bucket: next-step-assets
-  upload-path: uploads/
-
-
-# 개발 환경에서 로컬 테스트를 진행할 경우 아래 주석을 해제하여 사용할 수 있습니다.
-# frontend:
-#   oauth2-redirect-url: http://localhost:5173/oauth2/redirect
+  project-id: ${GCP_PROJECT_ID}
+  bucket: ${GCP_BUCKET}
+  upload-path: ${GCP_UPLOAD_PATH}

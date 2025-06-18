@@ -185,7 +185,10 @@ public class SecurityConfig {
                 })
             );
 
-        http.addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(
+        	    new JwtAuthenticationFilter(jwtTokenProvider, redisTemplate),
+        	    UsernamePasswordAuthenticationFilter.class
+        	);
 
         return http.build();
     }

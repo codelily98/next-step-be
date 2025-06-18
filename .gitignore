@@ -38,3 +38,6 @@ out/
 
 ### GCP Setting ###
 gcp-service-key.json
+
+### Setting File ###
+.env

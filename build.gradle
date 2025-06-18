@@ -48,6 +48,9 @@ dependencies {
 	// 개발용
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+	
+	// .env 적용
+	implementation 'me.paulschwarz:spring-dotenv:3.0.0'
 
 	// 테스트
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'

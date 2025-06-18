@@ -36,4 +36,21 @@ public class UserService {
 
         user.updateProfile(nickname, imageUrl); // ✅ User 엔티티 메서드 사용
     }
+
+    public String getCurrentNickname(String username) {
+        return userRepository.findByUsername(username)
+                .map(User::getNickname)
+                .orElse(null);
+    }
+
+    public String getCurrentProfileImageUrl(String username) {
+        return userRepository.findByUsername(username)
+                .map(User::getProfileImageUrl)
+                .orElse(null);
+    }
+    
+    public User getUserByUsername(String username) {
+        return userRepository.findByUsername(username).orElse(null);
+    }
+
 }
