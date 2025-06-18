@@ -13,11 +13,11 @@ public class GcsConfig {
 
     @Bean
     public Storage storage() throws Exception {
-        String credentialsPath = "/app/keys/gcp-service-key.json";
+        String credentialsPath = "/app/keys/gcp-key.json";
 
         return StorageOptions.newBuilder()
                 .setCredentials(GoogleCredentials.fromStream(new FileInputStream(credentialsPath)))
-                .setProjectId("next-step") // application.yml과 동일하게
+                .setProjectId("next-step-460309")
                 .build()
                 .getService();
     }

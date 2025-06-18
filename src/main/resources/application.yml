@@ -59,7 +59,7 @@ frontend:
   oauth2-redirect-url: https://portfolio-nextstep.info/oauth2/redirect
 
 gcp:
-  project-id: next-step
+  project-id: next-step-460309
   bucket: next-step-assets
   upload-path: uploads/
 
