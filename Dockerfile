@@ -5,7 +5,7 @@ FROM openjdk:17-jdk-slim
 WORKDIR /app
 
 # 3. 서비스 계정 키 파일 복사 (호스트의 keys/gcs-key.json 경로를 기준으로 함)
-COPY keys/gcs-key.json /app/keys/gcs-key.json
+COPY keys/gcs-key.json /app/keys/gcp-service-key.json
 
 # 4. 환경변수 설정 (GCS 인증용)
 ENV GOOGLE_APPLICATION_CREDENTIALS=/app/keys/gcp-service-key.json
