@@ -1,6 +1,7 @@
 package com.next_step_be.next_step_be.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.next_step_be.next_step_be.dto.UpdateProfileRequest;
 import com.next_step_be.next_step_be.dto.UserCacheDto;
 import com.next_step_be.next_step_be.service.UserService;
 import com.next_step_be.next_step_be.domain.User;
@@ -47,8 +48,14 @@ public class UserController {
                     dbUser.getRole(),
                     dbUser.getProfileImageUrl()
                 );
+
+                // ✅ 캐싱 추가
+                String json = objectMapper.writeValueAsString(fallbackUser);
+                redisTemplate.opsForValue().set(userKey, json);
+
                 return ResponseEntity.ok(fallbackUser);
             }
+
         } catch (Exception e) {
             return ResponseEntity.status(500).body("사용자 정보를 가져오는 중 오류 발생");
         }
@@ -65,7 +72,12 @@ public class UserController {
             return ResponseEntity.badRequest().body("닉네임을 입력해주세요.");
         }
 
-        if (nickname.trim().equals(user.getNickname())) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("인증되지 않은 사용자입니다.");
+        }
+
+        String currentNickname = user.getNickname();
+        if (currentNickname != null && currentNickname.equals(nickname.trim())) {
             return ResponseEntity.ok("본인의 기존 닉네임입니다.");
         }
 
@@ -77,11 +89,11 @@ public class UserController {
 
     @PutMapping
     public ResponseEntity<String> updateProfile(
-            @RequestPart("nickname") String nickname,
-            @RequestPart(value = "profileImage", required = false) MultipartFile profileImage,
+            @ModelAttribute UpdateProfileRequest request,
             @AuthenticationPrincipal User user) {
 
-        userService.updateProfile(user.getUsername(), nickname, profileImage);
+        userService.updateProfile(user.getUsername(), request);
         return ResponseEntity.ok("프로필이 성공적으로 수정되었습니다.");
     }
+
 }

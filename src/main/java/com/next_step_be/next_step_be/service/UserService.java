@@ -1,6 +1,7 @@
 package com.next_step_be.next_step_be.service;
 
 import com.next_step_be.next_step_be.domain.User;
+import com.next_step_be.next_step_be.dto.UpdateProfileRequest;
 import com.next_step_be.next_step_be.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,19 +24,24 @@ public class UserService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        // 닉네임 변경 시 중복 검사
-        if (!user.getNickname().equals(nickname) && userRepository.existsByNickname(nickname)) {
-            throw new IllegalArgumentException("이미 사용 중인 닉네임입니다.");
+        // 닉네임 변경 시 중복 검사 (null-safe)
+        if ((user.getNickname() != null && !user.getNickname().equals(nickname)) ||
+            (user.getNickname() == null && nickname != null)) {
+
+            if (userRepository.existsByNickname(nickname)) {
+                throw new IllegalArgumentException("이미 사용 중인 닉네임입니다.");
+            }
         }
 
         // 기존 이미지 유지, 새 이미지가 있을 경우 업로드
         String imageUrl = user.getProfileImageUrl();
         if (imageFile != null && !imageFile.isEmpty()) {
-            imageUrl = gcsUploader.upload(imageFile); // ✅ GCS 업로드로 대체
+            imageUrl = gcsUploader.upload(imageFile);
         }
 
-        user.updateProfile(nickname, imageUrl); // ✅ User 엔티티 메서드 사용
+        user.updateProfile(nickname, imageUrl);
     }
+
 
     public String getCurrentNickname(String username) {
         return userRepository.findByUsername(username)
@@ -51,6 +57,31 @@ public class UserService {
     
     public User getUserByUsername(String username) {
         return userRepository.findByUsername(username).orElse(null);
+    }
+
+    public void updateProfile(String username, UpdateProfileRequest request) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        String newNickname = request.getNickname();
+        MultipartFile newImage = request.getProfileImage();
+
+        // 닉네임 변경 시 중복 검사
+        if (newNickname != null && !newNickname.trim().isEmpty()) {
+            if (!newNickname.equals(user.getNickname()) && userRepository.existsByNickname(newNickname)) {
+                throw new IllegalArgumentException("이미 사용 중인 닉네임입니다.");
+            }
+        } else {
+            newNickname = user.getNickname(); // 기존 닉네임 유지
+        }
+
+        // 기존 이미지 유지, 새 이미지가 있을 경우 업로드
+        String imageUrl = user.getProfileImageUrl();
+        if (newImage != null && !newImage.isEmpty()) {
+            imageUrl = gcsUploader.upload(newImage);
+        }
+
+        user.updateProfile(newNickname, imageUrl);
     }
 
 }
