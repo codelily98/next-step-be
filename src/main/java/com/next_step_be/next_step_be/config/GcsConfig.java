@@ -18,8 +18,11 @@ public class GcsConfig {
 
     @Bean
     public Storage storage() throws IOException {
-        FileInputStream serviceAccountStream = new FileInputStream(gcpCredentialsPath);
-        GoogleCredentials credentials = GoogleCredentials.fromStream(serviceAccountStream);
-        return StorageOptions.newBuilder().setCredentials(credentials).build().getService();
+    	try (FileInputStream serviceAccountStream = new FileInputStream(gcpCredentialsPath)) {
+            GoogleCredentials credentials = GoogleCredentials.fromStream(serviceAccountStream);
+            return StorageOptions.newBuilder().setCredentials(credentials).build().getService();
+        } catch (IOException e) {
+            throw new RuntimeException("GCP 인증 파일을 로드하는 데 실패했습니다. 경로: " + gcpCredentialsPath, e);
+        }
     }
 }

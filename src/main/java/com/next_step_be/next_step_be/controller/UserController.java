@@ -16,7 +16,9 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -93,52 +95,67 @@ public class UserController {
 
     @PutMapping
     public ResponseEntity<?> updateProfile(
-            @ModelAttribute UpdateProfileRequest request,
+            @RequestParam String nickname,
+            @RequestParam(required = false) MultipartFile profileImage, // 파일을 받는 부분
             @AuthenticationPrincipal User user) {
 
-        userService.updateProfile(user.getUsername(), request);
-
-        // 사용자 정보 갱신
-        User updatedUser = userService.getUserByUsername(user.getUsername());
-
-        // 토큰 재발급
-        UsernamePasswordAuthenticationToken authToken =
-                new UsernamePasswordAuthenticationToken(
-                        updatedUser.getUsername(),
-                        null,
-                        List.of(new SimpleGrantedAuthority(updatedUser.getRole().name()))
-                );
-
-        String accessToken = jwtTokenProvider.generateToken(authToken, false);
-        String refreshToken = jwtTokenProvider.generateToken(authToken, true);
-
-        // Redis refreshToken 저장
-        redisTemplate.opsForValue().set(
-                "refresh:" + updatedUser.getUsername(),
-                refreshToken,
-                jwtTokenProvider.getRefreshTokenExpiration(),
-                TimeUnit.MILLISECONDS
-        );
-
-        // 캐시 갱신
-        UserCacheDto updatedCache = UserCacheDto.builder()
-                .username(updatedUser.getUsername())
-                .nickname(updatedUser.getNickname())
-                .role(updatedUser.getRole())
-                .profileImageUrl(updatedUser.getProfileImageUrl())
-                .build();
+        if (user == null || user.getUsername() == null || user.getRole() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body("인증 정보가 유효하지 않습니다.");
+        }
 
         try {
-            String json = objectMapper.writeValueAsString(updatedCache);
-            redisTemplate.opsForValue().set("user:" + updatedUser.getUsername(), json);
-        } catch (Exception ignored) {}
+            // 프로필 업데이트
+            userService.updateProfile(user.getUsername(), nickname, profileImage);
 
-        // FE에 사용자 정보도 같이 전달 (💡 중요)
-        return ResponseEntity.ok(Map.of(
-                "message", "프로필이 성공적으로 수정되었습니다.",
-                "accessToken", accessToken,
-                "nickname", updatedUser.getNickname(),
-                "profileImageUrl", updatedUser.getProfileImageUrl()
-        ));
+            // 토큰 재발급
+            UsernamePasswordAuthenticationToken authToken =
+                    new UsernamePasswordAuthenticationToken(user.getUsername(), null,
+                            List.of(new SimpleGrantedAuthority(user.getRole().name())));
+
+            String accessToken = jwtTokenProvider.generateToken(authToken, false);
+            String refreshToken = jwtTokenProvider.generateToken(authToken, true);
+
+            if (accessToken == null || refreshToken == null) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("토큰 생성에 실패했습니다.");
+            }
+
+            // Redis에 RefreshToken 저장
+            redisTemplate.opsForValue().set(
+                    "refresh:" + user.getUsername(),
+                    refreshToken,
+                    jwtTokenProvider.getRefreshTokenExpiration(),
+                    TimeUnit.MILLISECONDS
+            );
+
+            // 사용자 정보 최신화
+            User updatedUser = userService.getUserByUsername(user.getUsername());
+            UserCacheDto updatedCache = UserCacheDto.builder()
+                    .username(updatedUser.getUsername())
+                    .nickname(updatedUser.getNickname())
+                    .role(updatedUser.getRole())
+                    .profileImageUrl(updatedUser.getProfileImageUrl())
+                    .build();
+
+            // Redis 캐시 갱신
+            try {
+                String json = objectMapper.writeValueAsString(updatedCache);
+                redisTemplate.opsForValue().set("user:" + updatedUser.getUsername(), json);
+            } catch (Exception e) {
+                // 예외 발생 시 로깅 남기기
+                e.printStackTrace();
+            }
+
+            // 응답 구성
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "프로필이 성공적으로 수정되었습니다.");
+            response.put("accessToken", accessToken);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("프로필 수정 중 오류가 발생했습니다: " + e.getMessage());
+        }
     }
 }

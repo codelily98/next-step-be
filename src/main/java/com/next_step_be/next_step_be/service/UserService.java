@@ -13,75 +13,63 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional
 public class UserService {
 
-    private final GcsUploader gcsUploader; // 오타 수정
+    private final GcsUploader gcsUploader; // GCS 업로더
     private final UserRepository userRepository;
+
+    private static final long MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    private static final String[] ALLOWED_FILE_TYPES = {
+            "image/jpeg", "image/png", "image/webp", "image/gif"
+    };
 
     public boolean nicknameExists(String nickname) {
         return userRepository.existsByNickname(nickname);
     }
 
-    public void updateProfile(String username, String nickname, MultipartFile imageFile) {
+    public void updateProfile(String username, String nickname, MultipartFile profileImage) {
+        // 사용자 조회
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
-
-        // 닉네임 변경 시 중복 검사 (null-safe)
-        if ((user.getNickname() != null && !user.getNickname().equals(nickname)) ||
-            (user.getNickname() == null && nickname != null)) {
-
-            if (userRepository.existsByNickname(nickname)) {
-                throw new IllegalArgumentException("이미 사용 중인 닉네임입니다.");
-            }
-        }
-
-        // 기존 이미지 유지, 새 이미지가 있을 경우 업로드
-        String imageUrl = user.getProfileImageUrl();
-        if (imageFile != null && !imageFile.isEmpty()) {
-            imageUrl = gcsUploader.upload(imageFile);
-        }
-
-        user.updateProfile(nickname, imageUrl);
-    }
-
-
-    public String getCurrentNickname(String username) {
-        return userRepository.findByUsername(username)
-                .map(User::getNickname)
-                .orElse(null);
-    }
-
-    public String getCurrentProfileImageUrl(String username) {
-        return userRepository.findByUsername(username)
-                .map(User::getProfileImageUrl)
-                .orElse(null);
-    }
-    
-    public User getUserByUsername(String username) {
-        return userRepository.findByUsername(username).orElse(null);
-    }
-
-    public void updateProfile(String username, UpdateProfileRequest request) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
-
-        String newNickname = request.getNickname();
-        MultipartFile newImage = request.getProfileImage();
 
         // 닉네임 변경 시 중복 검사
-        if (newNickname != null && !newNickname.trim().isEmpty()) {
-            if (!newNickname.equals(user.getNickname()) && userRepository.existsByNickname(newNickname)) {
+        if (nickname != null && !nickname.trim().isEmpty()) {
+            if (!nickname.equals(user.getNickname()) && userRepository.existsByNickname(nickname)) {
                 throw new IllegalArgumentException("이미 사용 중인 닉네임입니다.");
             }
         } else {
-            newNickname = user.getNickname(); // 기존 닉네임 유지
+            nickname = user.getNickname(); // 기존 닉네임 유지
         }
 
-        // 기존 이미지 유지, 새 이미지가 있을 경우 업로드
+        // 프로필 이미지 처리
         String imageUrl = user.getProfileImageUrl();
-        if (newImage != null && !newImage.isEmpty()) {
-            imageUrl = gcsUploader.upload(newImage);
+        if (profileImage != null && !profileImage.isEmpty()) {
+            // 파일 형식과 크기 검증
+            if (!isValidFileType(profileImage.getContentType())) {
+                throw new IllegalArgumentException("지원되지 않는 파일 형식입니다.");
+            }
+
+            if (profileImage.getSize() > MAX_FILE_SIZE) {
+                throw new IllegalArgumentException("파일 크기는 50MB 이하로 업로드해야 합니다.");
+            }
+
+            // GCS 업로드
+            imageUrl = gcsUploader.upload(profileImage);
         }
 
-        user.updateProfile(newNickname, imageUrl);
+        // 사용자 프로필 업데이트
+        user.updateProfile(nickname, imageUrl);
     }
 
+    private boolean isValidFileType(String fileType) {
+        for (String allowedType : ALLOWED_FILE_TYPES) {
+            if (allowedType.equals(fileType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public User getUserByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+    }
 }
