@@ -1,0 +1,13 @@
+# Git 관련
+.git
+.gitignore
+
+# IDE/빌드 관련
+*.iml
+.gradle
+build/
+out/
+
+# OS/에디터 관련
+.DS_Store
+.vscode
