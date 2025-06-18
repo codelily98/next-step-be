@@ -52,32 +52,39 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         }
 
         String nickname = "KakaoUser";
+        String profileImageUrl = "https://storage.googleapis.com/next-step-assets/uploads/default.png";
+
         Object profileObj = kakaoAccount.get("profile");
         if (profileObj instanceof Map<?, ?> profileMapRaw) {
             @SuppressWarnings("unchecked")
             Map<String, Object> profileMap = (Map<String, Object>) profileMapRaw;
-            Object nicknameObj = profileMap.get("nickname");
-            if (nicknameObj instanceof String str) {
+
+            if (profileMap.get("nickname") instanceof String str) {
                 nickname = str;
+            }
+            if (profileMap.get("profile_image_url") instanceof String url) {
+                profileImageUrl = url;
             }
         }
 
         final String safeEmail = email;
         final String safeNickname = nickname;
+        final String safeProfileUrl = profileImageUrl;
 
         User user = userRepository.findByUsername(safeEmail).orElseGet(() ->
             userRepository.save(User.builder()
                 .username(safeEmail)
                 .nickname(safeNickname)
-                .password(passwordEncoder.encode("KAKAO_" + safeEmail))
+                .password(passwordEncoder.encode("KAKAO_" + safeEmail)) // ❗ dummy password (사용자 입력 불가)
+                .profileImageUrl(safeProfileUrl)
                 .role(Role.USER)
                 .build())
         );
 
         return new DefaultOAuth2User(
-                Collections.singleton(new SimpleGrantedAuthority("ROLE_USER")),
+                Collections.singleton(new SimpleGrantedAuthority("ROLE_" + user.getRole().name())),
                 attributes,
                 userNameAttributeName
         );
-    }    
+    }
 }

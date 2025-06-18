@@ -30,19 +30,22 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthenticationManager authenticationManager;
     private final RedisTemplate<String, String> redisTemplate;
-    private final ObjectMapper objectMapper = new ObjectMapper(); // JSON 변환기
+    private final ObjectMapper objectMapper;
 
     public AuthService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             JwtTokenProvider jwtTokenProvider,
             AuthenticationManager authenticationManager,
-            @Qualifier("redisTemplate") RedisTemplate<String, String> redisTemplate) {
+            @Qualifier("redisTemplate") RedisTemplate<String, String> redisTemplate,
+            ObjectMapper objectMapper
+    ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
         this.authenticationManager = authenticationManager;
         this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
@@ -55,120 +58,109 @@ public class AuthService {
         String generatedNickname = "user" + (userCount + 1);
 
         User user = User.builder()
-        	    .username(request.getUsername())
-        	    .password(passwordEncoder.encode(request.getPassword()))
-        	    .role(Role.USER)
-        	    .nickname(generatedNickname)
-        	    .profileImageUrl("https://storage.googleapis.com/next-step-assets/uploads/default.png") // 기본값 (또는 default 이미지 경로)
-        	    .build();
+                .username(request.getUsername())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role(Role.USER)
+                .nickname(generatedNickname)
+                .profileImageUrl("https://storage.googleapis.com/next-step-assets/uploads/default.png")
+                .build();
 
         return userRepository.save(user);
     }
 
     @Transactional
     public TokenResponse login(LoginRequest request) {
-        UsernamePasswordAuthenticationToken authenticationToken =
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword());
-
-        Authentication authentication = authenticationManager.authenticate(authenticationToken);
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        request.getUsername(), request.getPassword()
+                )
+        );
 
         String accessToken = jwtTokenProvider.generateToken(authentication, false);
         String refreshToken = jwtTokenProvider.generateToken(authentication, true);
-        long refreshTokenExpirationMillis = jwtTokenProvider.getRefreshTokenExpiration();
 
-        // 🔹 RefreshToken Redis 저장
-        String refreshKey = "refresh:" + authentication.getName();
-        redisTemplate.opsForValue().set(refreshKey, refreshToken, refreshTokenExpirationMillis, TimeUnit.MILLISECONDS);
+        String username = authentication.getName();
+        long refreshTTL = jwtTokenProvider.getRefreshTokenExpiration();
 
-        // 🔹 사용자 정보 Redis 캐싱 (7일 고정 TTL)
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new IllegalArgumentException("사용자 없음"));
+        // Redis 저장
+        redisTemplate.opsForValue().set("refresh:" + username, refreshToken, refreshTTL, TimeUnit.MILLISECONDS);
 
-        UserCacheDto userCache = new UserCacheDto(
-        	    user.getUsername(),
-        	    user.getNickname(),
-        	    user.getRole(),
-        	    user.getProfileImageUrl()
-        	);
-
-        String userKey = "user:" + user.getUsername();
-        redisTemplate.opsForValue().set(userKey, toJson(userCache), 7, TimeUnit.DAYS);
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("사용자 정보가 존재하지 않습니다."));
+        saveUserCache(user);
 
         return new TokenResponse(accessToken, refreshToken);
     }
 
-    @Transactional // Redis 작업 외에 DB 작업이 없다면 필수는 아님
+    @Transactional
     public TokenResponse refreshAccessToken(String oldRefreshToken) {
-        // 1. 기존 리프레시 토큰 유효성 검사 (서명, 만료 여부)
         if (!jwtTokenProvider.validateToken(oldRefreshToken)) {
             throw new IllegalArgumentException("유효하지 않거나 만료된 Refresh Token입니다.");
         }
 
         String username = jwtTokenProvider.getUsernameFromToken(oldRefreshToken);
-        String refreshKey = "refresh:" + username;
-        String storedRefreshToken = redisTemplate.opsForValue().get(refreshKey);
+        String redisKey = "refresh:" + username;
+        String storedToken = redisTemplate.opsForValue().get(redisKey);
 
-        // 2. Redis에 저장된 토큰과 일치하는지 확인 (탈취/재사용 방지)
-        if (storedRefreshToken == null || !storedRefreshToken.equals(oldRefreshToken)) {
-            if (storedRefreshToken != null) { // 불일치하는 토큰이 Redis에 있다면 삭제하여 추가 재사용 방지
-                redisTemplate.delete(refreshKey);
-                log.warn("Refresh Token 불일치 감지. Redis 토큰 삭제: {}", username);
-            } else {
-                 log.warn("저장된 Refresh Token 없음. 재로그인 필요: {}", username);
-            }
-            throw new IllegalArgumentException("Refresh Token이 유효하지 않거나 이미 사용되었습니다. 다시 로그인해주세요.");
+        if (storedToken == null || !storedToken.equals(oldRefreshToken)) {
+            redisTemplate.delete(redisKey);
+            log.warn("🔐 Refresh Token 불일치 또는 존재하지 않음: {}", username);
+            throw new IllegalArgumentException("Refresh Token이 유효하지 않거나 만료되었습니다. 다시 로그인해주세요.");
         }
 
-        // 3. 기존 리프레시 토큰 무효화 (Redis에서 삭제)
-        redisTemplate.delete(refreshKey); 
-        log.info("기존 Refresh Token 무효화 완료: {}", username);
+        // 기존 토큰 무효화
+        redisTemplate.delete(redisKey);
 
-        // 4. 새로운 액세스 토큰 및 리프레시 토큰 발급
         Authentication authentication = jwtTokenProvider.getAuthentication(oldRefreshToken);
         String newAccessToken = jwtTokenProvider.generateToken(authentication, false);
         String newRefreshToken = jwtTokenProvider.generateToken(authentication, true);
-        long newRefreshTokenExpirationMillis = jwtTokenProvider.getRefreshTokenExpiration();
+        long newTTL = jwtTokenProvider.getRefreshTokenExpiration();
 
-        // 5. 새로운 리프레시 토큰 Redis 저장
-        redisTemplate.opsForValue().set(refreshKey, newRefreshToken, newRefreshTokenExpirationMillis, TimeUnit.MILLISECONDS);
-        log.info("새 AccessToken 및 RefreshToken 재발급 완료 - user: {}", username);
+        redisTemplate.opsForValue().set(redisKey, newRefreshToken, newTTL, TimeUnit.MILLISECONDS);
+        log.info("♻️ RefreshToken 재발급 완료: {}", username);
 
-        // 6. 새로운 토큰들 반환
         return new TokenResponse(newAccessToken, newRefreshToken);
     }
 
+    @Transactional
     public boolean logout(String accessToken, String refreshToken) {
         String username = jwtTokenProvider.getUsernameFromToken(accessToken);
 
-        // 🔧 Key 이름 일치화
+        // RefreshToken 삭제
         String refreshKey = "refresh:" + username;
-        if (redisTemplate.hasKey(refreshKey)) {
+        boolean existed = Boolean.TRUE.equals(redisTemplate.hasKey(refreshKey));
+        if (existed) {
             redisTemplate.delete(refreshKey);
-        } else {
-            return false;
         }
 
+        // AccessToken 블랙리스트 등록
         Long expiration = jwtTokenProvider.getExpiration(accessToken);
         if (expiration != null && expiration > 0) {
-            redisTemplate.opsForValue().set(accessToken, "logout", expiration, TimeUnit.MILLISECONDS);
+            redisTemplate.opsForValue().set("blacklist:" + accessToken, "logout", expiration, TimeUnit.MILLISECONDS);
         }
 
-        // 사용자 캐시 삭제 (선택 사항)
+        // 유저 캐시 제거
         redisTemplate.delete("user:" + username);
-
-        return true;
+        log.info("🚪 로그아웃 처리 완료: {}", username);
+        return existed;
     }
 
     public long getRefreshTokenExpiration() {
         return jwtTokenProvider.getRefreshTokenExpiration();
     }
 
-    // JSON 변환 헬퍼
-    private String toJson(Object obj) {
+    private void saveUserCache(User user) {
         try {
-            return objectMapper.writeValueAsString(obj);
+            UserCacheDto dto = new UserCacheDto(
+                    user.getUsername(),
+                    user.getNickname(),
+                    user.getRole(),
+                    user.getProfileImageUrl()
+            );
+            String json = objectMapper.writeValueAsString(dto);
+            redisTemplate.opsForValue().set("user:" + user.getUsername(), json, 7, TimeUnit.DAYS);
         } catch (Exception e) {
-            throw new RuntimeException("JSON 직렬화 실패", e);
+            log.error("❗ 유저 캐시 저장 실패: {}", e.getMessage());
         }
     }
 }

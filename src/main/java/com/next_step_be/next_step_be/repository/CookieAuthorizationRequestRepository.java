@@ -78,9 +78,10 @@ class CookieUtils {
         if (cookies != null) {
             for (Cookie cookie : cookies) {
                 if (cookie.getName().equals(name)) {
-                    cookie.setValue("");
-                    cookie.setPath("/");
-                    cookie.setMaxAge(0);
+                	cookie.setSecure(true);
+                	cookie.setHttpOnly(true);
+                	cookie.setPath("/");
+                	cookie.setMaxAge(0);
                     response.addCookie(cookie);
                 }
             }
@@ -101,6 +102,7 @@ class CookieUtils {
 	        String json = new String(Base64.getUrlDecoder().decode(cookie.getValue()), StandardCharsets.UTF_8);
 	        return objectMapper.readValue(json, cls);
 	    } catch (Exception e) {
+	        System.err.println("❗ 쿠키 역직렬화 실패: " + e.getMessage());
 	        return null;
 	    }
 	}

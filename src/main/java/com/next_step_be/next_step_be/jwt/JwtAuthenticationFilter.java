@@ -36,58 +36,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String requestURI = request.getRequestURI();
 
         try {
+            // 🔒 블랙리스트 확인
+            if (accessToken != null && redisTemplate.hasKey("blacklist:" + accessToken)) {
+                log.warn("🚫 블랙리스트 처리된 AccessToken 요청 차단 - uri: {}", requestURI);
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "로그아웃된 토큰입니다.");
+                return;
+            }
+
             if (accessToken != null && jwtTokenProvider.validateToken(accessToken)) {
                 Authentication authentication = jwtTokenProvider.getAuthentication(accessToken);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
                 log.debug("✅ 유효한 AccessToken으로 인증 완료: {}", authentication.getName());
 
             } else if (accessToken != null && jwtTokenProvider.isExpiredToken(accessToken)) {
-                String refreshToken = getRefreshTokenFromCookies(request);
-
-                if (refreshToken != null && jwtTokenProvider.validateToken(refreshToken)) {
-                    String username = jwtTokenProvider.getUsernameFromToken(refreshToken);
-                    String redisRefresh = redisTemplate.opsForValue().get("refresh:" + username);
-
-                    if (refreshToken.equals(redisRefresh)) {
-                        Authentication authentication = jwtTokenProvider.getAuthentication(refreshToken);
-                        SecurityContextHolder.getContext().setAuthentication(authentication);
-
-                        String newAccessToken = jwtTokenProvider.generateToken(authentication, false);
-                        String newRefreshToken = jwtTokenProvider.generateToken(authentication, true);
-
-                        redisTemplate.opsForValue().set("refresh:" + username, newRefreshToken,
-                                jwtTokenProvider.getRefreshTokenExpiration(), TimeUnit.MILLISECONDS);
-
-                        response.setHeader("Authorization", "Bearer " + newAccessToken);
-
-                        Cookie newCookie = new Cookie("refreshToken", newRefreshToken);
-                        newCookie.setHttpOnly(true);
-                        newCookie.setSecure(true);
-                        newCookie.setPath("/");
-                        newCookie.setMaxAge((int) (jwtTokenProvider.getRefreshTokenExpiration() / 1000));
-                        response.addCookie(newCookie);
-
-                        log.info("♻️ AccessToken + RefreshToken 재발급 완료 - user: {}", username);
-                    } else {
-                        log.warn("❌ Redis에 저장된 RefreshToken과 일치하지 않음. 강제 로그아웃 처리. user: {}", username);
-                        redisTemplate.delete("refresh:" + username); // Redis에서 해당 유저의 리프레시 토큰 삭제
-                        // 기존 리프레시 토큰 쿠키 무효화
-                        Cookie invalidCookie = new Cookie("refreshToken", null);
-                        invalidCookie.setHttpOnly(true);
-                        invalidCookie.setSecure(true);
-                        invalidCookie.setPath("/");
-                        invalidCookie.setMaxAge(0); // 쿠키 즉시 만료
-                        response.addCookie(invalidCookie);
-
-                        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid Refresh Token. Please log in again.");
-                        return; // 필터 체인 중단
-                    }
-                } else {
-                    log.warn("❌ RefreshToken이 유효하지 않음");
-                }
+                // 🔄 AccessToken 만료 → RefreshToken으로 재발급 시도
+                handleRefresh(request, response);
+                return;
 
             } else {
-                log.debug("❌ 유효한 JWT 토큰이 없음 - uri: {}", requestURI);
+                log.debug("❌ JWT 토큰이 없거나 형식이 잘못됨 - uri: {}", requestURI);
             }
 
         } catch (Exception e) {
@@ -97,10 +64,67 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    private void handleRefresh(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        String refreshToken = getRefreshTokenFromCookies(request);
+
+        if (refreshToken != null && jwtTokenProvider.validateToken(refreshToken)) {
+            String username = jwtTokenProvider.getUsernameFromToken(refreshToken);
+            String storedRefreshToken = redisTemplate.opsForValue().get("refresh:" + username);
+
+            if (refreshToken.equals(storedRefreshToken)) {
+                Authentication authentication = jwtTokenProvider.getAuthentication(refreshToken);
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+
+                String newAccessToken = jwtTokenProvider.generateToken(authentication, false);
+                String newRefreshToken = jwtTokenProvider.generateToken(authentication, true);
+
+                redisTemplate.opsForValue().set("refresh:" + username, newRefreshToken,
+                        jwtTokenProvider.getRefreshTokenExpiration(), TimeUnit.MILLISECONDS);
+
+                // 🍪 새 RefreshToken 쿠키 설정
+                Cookie newCookie = new Cookie("refreshToken", newRefreshToken);
+                newCookie.setHttpOnly(true);
+                newCookie.setSecure(true);
+                newCookie.setPath("/");
+                newCookie.setMaxAge((int) (jwtTokenProvider.getRefreshTokenExpiration() / 1000));
+                response.addCookie(newCookie);
+
+                // 🔐 새 AccessToken 응답 반환
+                response.setContentType("application/json");
+                response.setCharacterEncoding("UTF-8");
+                response.setHeader("Authorization", "Bearer " + newAccessToken);
+                response.getWriter().write("{\"accessToken\": \"" + newAccessToken + "\"}");
+                response.getWriter().flush();
+
+                log.info("♻️ AccessToken + RefreshToken 재발급 완료 - user: {}", username);
+                return;
+
+            } else {
+                // ❌ Redis 저장된 토큰 불일치 (탈취 가능성)
+                redisTemplate.delete("refresh:" + username);
+
+                // 쿠키 제거
+                Cookie expiredCookie = new Cookie("refreshToken", null);
+                expiredCookie.setHttpOnly(true);
+                expiredCookie.setSecure(true);
+                expiredCookie.setPath("/");
+                expiredCookie.setMaxAge(0);
+                response.addCookie(expiredCookie);
+
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Refresh Token이 유효하지 않습니다. 다시 로그인해주세요.");
+                log.warn("❌ RefreshToken 불일치: {}", username);
+            }
+
+        } else {
+            log.warn("❌ 유효하지 않은 RefreshToken 요청");
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Refresh Token이 유효하지 않거나 만료되었습니다.");
+        }
+    }
+
     private String resolveToken(HttpServletRequest request) {
-        String bearerToken = request.getHeader("Authorization");
-        return (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer "))
-                ? bearerToken.substring(7)
+        String bearer = request.getHeader("Authorization");
+        return (StringUtils.hasText(bearer) && bearer.startsWith("Bearer "))
+                ? bearer.substring(7)
                 : null;
     }
 

@@ -65,7 +65,7 @@ public class KakaoAuthService {
         }
     }
 
-    public String kakaoUnlinkWithAdminKey(Long userId) {
+    public String kakaoUnlinkWithAdminKey(String userId) {
         String unlinkApiUrl = "https://kapi.kakao.com/v1/user/unlink";
 
         HttpHeaders headers = new HttpHeaders();
