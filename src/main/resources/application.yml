@@ -1,8 +1,7 @@
-server:
-  port: 8080
-  forward-headers-strategy: framework
-
 spring:
+  config:
+    import: optional:env[.env]
+
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -49,7 +48,10 @@ spring:
             token-uri: https://kauth.kakao.com/oauth/token
             user-info-uri: https://kapi.kakao.com/v2/user/me
             user-name-attribute: id
-            admin-key: ${KAKAO_ADMIN_KEY} # 환경변수 주입
+
+server:
+  port: 8080
+  forward-headers-strategy: framework
 
 jwt:
   secret: ${JWT_SECRET}
@@ -63,3 +65,7 @@ gcp:
   project-id: ${GCP_PROJECT_ID}
   bucket: ${GCP_BUCKET}
   upload-path: ${GCP_UPLOAD_PATH}
+
+custom:
+  kakao:
+    admin-key: ${KAKAO_ADMIN_KEY}

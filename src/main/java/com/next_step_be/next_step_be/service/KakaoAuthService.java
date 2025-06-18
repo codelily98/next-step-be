@@ -12,7 +12,7 @@ public class KakaoAuthService {
 
     private final RestTemplate restTemplate;
 
-    @Value("${kakao.admin-key}")
+    @Value("${custom.kakao.admin-key}")
     private String adminKey;
 
     public KakaoAuthService(RestTemplate restTemplate) {
