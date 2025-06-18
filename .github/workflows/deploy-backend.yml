@@ -1,71 +1,151 @@
+# name: Deploy Spring Boot Backend to GCP VM
+
+# on:
+#     push:
+#         branches:
+#             - main
+
+# env:
+#     PROJECT_ID: next-step-460309
+#     AR_HOSTNAME: asia-northeast3-docker.pkg.dev
+#     AR_REPOSITORY: next-step-docker
+#     IMAGE_NAME: spring-boot-backend
+#     VM_INSTANCE_NAME: next-step-backend
+#     VM_ZONE: asia-northeast3-c
+#     VM_USER: nextstep9898
+
+# jobs:
+#     build-and-deploy:
+#         runs-on: ubuntu-latest
+
+#         steps:
+#             - name: Checkout code
+#               uses: actions/checkout@v4
+
+#             - name: Set up JDK 17
+#               uses: actions/setup-java@v4
+#               with:
+#                   java-version: "17"
+#                   distribution: "temurin"
+#                   cache: "gradle"
+
+#             - name: Build with Gradle
+#               run: |
+#                   chmod +x gradlew
+#                   ./gradlew clean bootJar
+
+#             - name: Authenticate to GCP
+#               uses: google-github-actions/auth@v2
+#               with:
+#                   credentials_json: ${{ secrets.GCP_SA_KEY }}
+#                   export_environment_variables: true
+#                   access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+
+#             - name: Set up Cloud SDK
+#               uses: google-github-actions/setup-gcloud@v2
+#               with:
+#                   project_id: ${{ env.PROJECT_ID }}
+
+#             - name: Configure Docker to use Artifact Registry
+#               run: |
+#                   gcloud auth configure-docker ${{ env.AR_HOSTNAME }} --quiet
+
+#             - name: Build & Push Docker image to Artifact Registry
+#               run: |
+#                   docker build -t ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest .
+#                   docker push ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
+
+#             - name: Deploy to GCP VM using gcloud SSH
+#               run: |
+#                   gcloud compute ssh nextstep9898@${{ env.VM_INSTANCE_NAME }} \
+#                   --project=${{ env.PROJECT_ID }} \
+#                   --zone=${{ env.VM_ZONE }} \
+#                   --tunnel-through-iap \
+#                   --command="\
+#                   gcloud auth configure-docker ${{ env.AR_HOSTNAME }} --quiet && \
+#                   gcloud auth print-access-token | sudo docker login -u oauth2accesstoken --password-stdin https://${{ env.AR_HOSTNAME }} && \
+#                   sudo docker pull ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest && \
+#                   sudo docker stop ${{ env.IMAGE_NAME }} || true && \
+#                   sudo docker rm ${{ env.IMAGE_NAME }} || true && \
+#                   sudo docker run -d --name ${{ env.IMAGE_NAME }} -p 8080:8080 ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest \
+#                   "
+
 name: Deploy Spring Boot Backend to GCP VM
 
 on:
-    push:
-        branches:
-            - main
+  push:
+    branches:
+      - main
 
 env:
-    PROJECT_ID: next-step-460309
-    AR_HOSTNAME: asia-northeast3-docker.pkg.dev
-    AR_REPOSITORY: next-step-docker
-    IMAGE_NAME: spring-boot-backend
-    VM_INSTANCE_NAME: next-step-backend
-    VM_ZONE: asia-northeast3-c
-    VM_USER: nextstep9898
+  PROJECT_ID: next-step-460309
+  AR_HOSTNAME: asia-northeast3-docker.pkg.dev
+  AR_REPOSITORY: next-step-docker
+  IMAGE_NAME: spring-boot-backend
+  VM_INSTANCE_NAME: next-step-backend
+  VM_ZONE: asia-northeast3-c
+  VM_USER: nextstep9898
 
 jobs:
-    build-and-deploy:
-        runs-on: ubuntu-latest
+  build-and-deploy:
+    runs-on: ubuntu-latest
 
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Set up JDK 17
-              uses: actions/setup-java@v4
-              with:
-                  java-version: "17"
-                  distribution: "temurin"
-                  cache: "gradle"
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: "gradle"
 
-            - name: Build with Gradle
-              run: |
-                  chmod +x gradlew
-                  ./gradlew clean bootJar
+      - name: Build with Gradle
+        run: |
+          chmod +x gradlew
+          ./gradlew clean bootJar
 
-            - name: Authenticate to GCP
-              uses: google-github-actions/auth@v2
-              with:
-                  credentials_json: ${{ secrets.GCP_SA_KEY }}
-                  export_environment_variables: true
-                  access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          export_environment_variables: true
+          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
 
-            - name: Set up Cloud SDK
-              uses: google-github-actions/setup-gcloud@v2
-              with:
-                  project_id: ${{ env.PROJECT_ID }}
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
 
-            - name: Configure Docker to use Artifact Registry
-              run: |
-                  gcloud auth configure-docker ${{ env.AR_HOSTNAME }} --quiet
+      - name: Configure Docker to use Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.AR_HOSTNAME }} --quiet
 
-            - name: Build & Push Docker image to Artifact Registry
-              run: |
-                  docker build -t ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest .
-                  docker push ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
+      - name: Build & Push Docker image to Artifact Registry
+        run: |
+          docker build -t ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest .
+          docker push ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
 
-            - name: Deploy to GCP VM using gcloud SSH
-              run: |
-                  gcloud compute ssh nextstep9898@${{ env.VM_INSTANCE_NAME }} \
-                  --project=${{ env.PROJECT_ID }} \
-                  --zone=${{ env.VM_ZONE }} \
-                  --tunnel-through-iap \
-                  --command="\
-                  gcloud auth configure-docker ${{ env.AR_HOSTNAME }} --quiet && \
-                  gcloud auth print-access-token | sudo docker login -u oauth2accesstoken --password-stdin https://${{ env.AR_HOSTNAME }} && \
-                  sudo docker pull ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest && \
-                  sudo docker stop ${{ env.IMAGE_NAME }} || true && \
-                  sudo docker rm ${{ env.IMAGE_NAME }} || true && \
-                  sudo docker run -d --name ${{ env.IMAGE_NAME }} -p 8080:8080 ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest \
-                  "
+      - name: Upload GCP service account key to VM
+        run: |
+          echo "${{ secrets.GCP_STORAGE_KEY_JSON }}" > gcp-key.json
+          gcloud compute scp gcp-key.json ${{ env.VM_USER }}@${{ env.VM_INSTANCE_NAME }}:/home/${{ env.VM_USER }}/gcp-key.json \
+            --zone=${{ env.VM_ZONE }} --tunnel-through-iap --quiet
+
+      - name: Deploy to GCP VM using gcloud SSH
+        run: |
+          gcloud compute ssh ${{ env.VM_USER }}@${{ env.VM_INSTANCE_NAME }} \
+            --project=${{ env.PROJECT_ID }} \
+            --zone=${{ env.VM_ZONE }} \
+            --tunnel-through-iap \
+            --command="\
+              gcloud auth configure-docker ${{ env.AR_HOSTNAME }} --quiet && \
+              gcloud auth print-access-token | sudo docker login -u oauth2accesstoken --password-stdin https://${{ env.AR_HOSTNAME }} && \
+              sudo docker pull ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest && \
+              sudo docker stop ${{ env.IMAGE_NAME }} || true && \
+              sudo docker rm ${{ env.IMAGE_NAME }} || true && \
+              sudo docker run -d --name ${{ env.IMAGE_NAME }} -p 8080:8080 \
+                -e GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json \
+                -v /home/${{ env.VM_USER }}/gcp-key.json:/app/gcp-key.json \
+                ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest"
