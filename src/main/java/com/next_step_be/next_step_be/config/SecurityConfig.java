@@ -83,7 +83,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         // ✅ 수정된 부분: setAllowedOriginPatterns 대신 setAllowedOrigins를 사용하여 정확한 출처를 지정
-        configuration.setAllowedOrigins(List.of("https://portfolio-nextstep.info", "http://localhost:3000")); // 로컬 개발용도 추가
+        configuration.setAllowedOrigins(List.of("https://portfolio-nextstep.info", "http://localhost:5173")); // 로컬 개발용도 추가
         // 개발 완료 후 "http://localhost:3000"은 제거하는 것이 좋습니다.
 
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
@@ -122,10 +122,14 @@ public class SecurityConfig {
                         String username = null;
                         Map<String, Object> attributes = oAuth2User.getAttributes();
                         if (attributes != null && attributes.containsKey("kakao_account")) {
-                            Map<String, Object> kakaoAccount = (Map<String, Object>) attributes.get("kakao_account");
-                            if (kakaoAccount != null && kakaoAccount.containsKey("email")) {
-                                username = (String) kakaoAccount.get("email");
-                            }
+                        	Object kakaoAccountObj = attributes.get("kakao_account");
+                        	if (kakaoAccountObj instanceof Map<?, ?> rawMap) {
+                        	    Map<?, ?> genericMap = rawMap;
+                        	    Object emailObj = genericMap.get("email");
+                        	    if (emailObj instanceof String email) {
+                        	        username = email;
+                        	    }
+                        	}
                         }
 
                         if (username == null || username.isEmpty()) {

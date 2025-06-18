@@ -8,7 +8,9 @@ import org.springframework.security.oauth2.client.web.AuthorizationRequestReposi
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.WebUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Optional;
 
@@ -60,6 +62,7 @@ public class CookieAuthorizationRequestRepository implements AuthorizationReques
 }
 
 class CookieUtils {
+	private static final ObjectMapper objectMapper = new ObjectMapper();
 
     public static void addCookie(HttpServletResponse response, String name, String value, int maxAge) {
         Cookie cookie = new Cookie(name, value);
@@ -84,20 +87,22 @@ class CookieUtils {
         }
     }
 
-    public static String serialize(Object object) {
-        if (object == null) return null;
-        byte[] bytes = org.springframework.util.SerializationUtils.serialize(object);
-        return Base64.getUrlEncoder().encodeToString(bytes);
-    }
-
-    public static <T> T deserialize(Cookie cookie, Class<T> cls) {
-        try {
-            byte[] bytes = Base64.getUrlDecoder().decode(cookie.getValue());
-            Object deserialized = org.springframework.util.SerializationUtils.deserialize(bytes);
-            return cls.cast(deserialized);
-        } catch (Exception e) {
-            return null; // 역직렬화 실패 시 null
-        }
-    }
+	public static String serialize(Object object) {
+	    try {
+	        String json = objectMapper.writeValueAsString(object);
+	        return Base64.getUrlEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+	    } catch (Exception e) {
+	        throw new RuntimeException("직렬화 실패", e);
+	    }
+	}
+	
+	public static <T> T deserialize(Cookie cookie, Class<T> cls) {
+	    try {
+	        String json = new String(Base64.getUrlDecoder().decode(cookie.getValue()), StandardCharsets.UTF_8);
+	        return objectMapper.readValue(json, cls);
+	    } catch (Exception e) {
+	        return null;
+	    }
+	}
 }
 
