@@ -40,4 +40,4 @@ out/
 gcp-key.json
 
 ### Setting File ###
-.env
+.envgcp-key.json
