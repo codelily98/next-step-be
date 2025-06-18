@@ -98,20 +98,29 @@ public class UserController {
 
         userService.updateProfile(user.getUsername(), request);
 
-        // 토큰 재발급 로직 추가
+        // 사용자 정보 갱신
+        User updatedUser = userService.getUserByUsername(user.getUsername());
+
+        // 토큰 재발급
         UsernamePasswordAuthenticationToken authToken =
-                new UsernamePasswordAuthenticationToken(user.getUsername(), null,
-                        List.of(new SimpleGrantedAuthority(user.getRole().name())));
+                new UsernamePasswordAuthenticationToken(
+                        updatedUser.getUsername(),
+                        null,
+                        List.of(new SimpleGrantedAuthority(updatedUser.getRole().name()))
+                );
 
         String accessToken = jwtTokenProvider.generateToken(authToken, false);
         String refreshToken = jwtTokenProvider.generateToken(authToken, true);
 
         // Redis refreshToken 저장
-        redisTemplate.opsForValue().set("refresh:" + user.getUsername(), refreshToken,
-                jwtTokenProvider.getRefreshTokenExpiration(), TimeUnit.MILLISECONDS);
+        redisTemplate.opsForValue().set(
+                "refresh:" + updatedUser.getUsername(),
+                refreshToken,
+                jwtTokenProvider.getRefreshTokenExpiration(),
+                TimeUnit.MILLISECONDS
+        );
 
-        // 새로운 사용자 정보 반환
-        User updatedUser = userService.getUserByUsername(user.getUsername());
+        // 캐시 갱신
         UserCacheDto updatedCache = UserCacheDto.builder()
                 .username(updatedUser.getUsername())
                 .nickname(updatedUser.getNickname())
@@ -119,15 +128,17 @@ public class UserController {
                 .profileImageUrl(updatedUser.getProfileImageUrl())
                 .build();
 
-        // Redis 캐시 갱신
         try {
             String json = objectMapper.writeValueAsString(updatedCache);
             redisTemplate.opsForValue().set("user:" + updatedUser.getUsername(), json);
         } catch (Exception ignored) {}
 
+        // FE에 사용자 정보도 같이 전달 (💡 중요)
         return ResponseEntity.ok(Map.of(
                 "message", "프로필이 성공적으로 수정되었습니다.",
-                "accessToken", accessToken
+                "accessToken", accessToken,
+                "nickname", updatedUser.getNickname(),
+                "profileImageUrl", updatedUser.getProfileImageUrl()
         ));
     }
 }
