@@ -97,25 +97,44 @@ public class AuthService {
         return new TokenResponse(accessToken, refreshToken);
     }
 
-    public String refreshAccessToken(String refreshToken) {
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
-            throw new IllegalArgumentException("유효하지 않은 Refresh Token입니다.");
+    @Transactional // Redis 작업 외에 DB 작업이 없다면 필수는 아님
+    public TokenResponse refreshAccessToken(String oldRefreshToken) {
+        // 1. 기존 리프레시 토큰 유효성 검사 (서명, 만료 여부)
+        if (!jwtTokenProvider.validateToken(oldRefreshToken)) {
+            throw new IllegalArgumentException("유효하지 않거나 만료된 Refresh Token입니다.");
         }
 
-        String username = jwtTokenProvider.getUsernameFromToken(refreshToken);
-        String key = "refresh:" + username;
-        String storedToken = redisTemplate.opsForValue().get(key);
+        String username = jwtTokenProvider.getUsernameFromToken(oldRefreshToken);
+        String refreshKey = "refresh:" + username;
+        String storedRefreshToken = redisTemplate.opsForValue().get(refreshKey);
 
-        if (storedToken == null || !storedToken.equals(refreshToken)) {
-            throw new IllegalArgumentException("Refresh Token이 만료되었거나 저장되지 않았습니다.");
+        // 2. Redis에 저장된 토큰과 일치하는지 확인 (탈취/재사용 방지)
+        if (storedRefreshToken == null || !storedRefreshToken.equals(oldRefreshToken)) {
+            if (storedRefreshToken != null) { // 불일치하는 토큰이 Redis에 있다면 삭제하여 추가 재사용 방지
+                redisTemplate.delete(refreshKey);
+                log.warn("Refresh Token 불일치 감지. Redis 토큰 삭제: {}", username);
+            } else {
+                 log.warn("저장된 Refresh Token 없음. 재로그인 필요: {}", username);
+            }
+            throw new IllegalArgumentException("Refresh Token이 유효하지 않거나 이미 사용되었습니다. 다시 로그인해주세요.");
         }
 
-        // 🎯 RefreshToken TTL 연장만 수행 (user 캐시는 그대로 둠)
-        long ttl = jwtTokenProvider.getRefreshTokenExpiration();
-        redisTemplate.opsForValue().set(key, storedToken, ttl, TimeUnit.MILLISECONDS);
+        // 3. 기존 리프레시 토큰 무효화 (Redis에서 삭제)
+        redisTemplate.delete(refreshKey); 
+        log.info("기존 Refresh Token 무효화 완료: {}", username);
 
-        Authentication authentication = jwtTokenProvider.getAuthentication(refreshToken);
-        return jwtTokenProvider.generateToken(authentication, false);
+        // 4. 새로운 액세스 토큰 및 리프레시 토큰 발급
+        Authentication authentication = jwtTokenProvider.getAuthentication(oldRefreshToken);
+        String newAccessToken = jwtTokenProvider.generateToken(authentication, false);
+        String newRefreshToken = jwtTokenProvider.generateToken(authentication, true);
+        long newRefreshTokenExpirationMillis = jwtTokenProvider.getRefreshTokenExpiration();
+
+        // 5. 새로운 리프레시 토큰 Redis 저장
+        redisTemplate.opsForValue().set(refreshKey, newRefreshToken, newRefreshTokenExpirationMillis, TimeUnit.MILLISECONDS);
+        log.info("새 AccessToken 및 RefreshToken 재발급 완료 - user: {}", username);
+
+        // 6. 새로운 토큰들 반환
+        return new TokenResponse(newAccessToken, newRefreshToken);
     }
 
     public boolean logout(String accessToken, String refreshToken) {

@@ -50,7 +50,7 @@ public class AuthController {
         refreshTokenCookie.setMaxAge((int) (authService.getRefreshTokenExpiration() / 1000));
         response.addCookie(refreshTokenCookie);
 
-        return ResponseEntity.ok(new TokenResponse(tokenResponse.getAccessToken(), null));
+        return ResponseEntity.ok(new TokenResponse(tokenResponse.getAccessToken(), null)); // ✅ 이 줄은 유지
     }
 
     @PostMapping("/logout")
@@ -83,20 +83,26 @@ public class AuthController {
     }
     
     @PostMapping("/refresh-token")
-    public ResponseEntity<?> refreshToken(
-            @CookieValue(name = "refreshToken", required = false) String refreshToken) {
-
+    public ResponseEntity<TokenResponse> refreshToken(
+        @CookieValue(name = "refreshToken", required = false) String refreshToken) {
+        
         if (refreshToken == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Refresh Token is missing.");
+            return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new TokenResponse(null, "Refresh Token is missing."));
         }
 
         try {
-            String newAccessToken = authService.refreshAccessToken(refreshToken);
-            return ResponseEntity.ok(new TokenResponse(newAccessToken, null));
+            TokenResponse tokenResponse = authService.refreshAccessToken(refreshToken);
+            return ResponseEntity.ok(tokenResponse);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
+            return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new TokenResponse(null, e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Token refresh failed.");
+            return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new TokenResponse(null, "Token refresh failed."));
         }
     }
 

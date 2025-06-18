@@ -129,8 +129,8 @@ jobs:
 
       - name: Upload GCP service account key to VM
         run: |
-          echo "${{ secrets.GCP_STORAGE_KEY_JSON }}" > gcp-key.json
-          gcloud compute scp gcp-key.json ${{ env.VM_USER }}@${{ env.VM_INSTANCE_NAME }}:/home/${{ env.VM_USER }}/gcp-key.json \
+          echo "${{ secrets.GCP_STORAGE_KEY_JSON }}" > gcp-service-key.json
+          gcloud compute scp gcp-service-key.json ${{ env.VM_USER }}@${{ env.VM_INSTANCE_NAME }}:/home/${{ env.VM_USER }}/gcp-service-key.json \
             --zone=${{ env.VM_ZONE }} --tunnel-through-iap --quiet
 
       - name: Deploy to GCP VM using gcloud SSH
@@ -146,6 +146,6 @@ jobs:
               sudo docker stop ${{ env.IMAGE_NAME }} || true && \
               sudo docker rm ${{ env.IMAGE_NAME }} || true && \
               sudo docker run -d --name ${{ env.IMAGE_NAME }} -p 8080:8080 \
-                -e GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json \
-                -v /home/${{ env.VM_USER }}/gcp-key.json:/app/gcp-key.json \
+                -e GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-service-key.json \
+                -v /home/${{ env.VM_USER }}/gcp-service-key.json:/app/gcp-service-key.json \
                 ${{ env.AR_HOSTNAME }}/${{ env.PROJECT_ID }}/${{ env.AR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest"

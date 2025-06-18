@@ -7,7 +7,9 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import jakarta.servlet.http.Cookie;
-import java.io.IOException; // successHandler 람다에서 IOException을 던질 수 있으므로 추가
+import jakarta.servlet.http.HttpServletRequest; // HttpServletRequest 임포트 추가
+import jakarta.servlet.http.HttpServletResponse; // HttpServletResponse 임포트 추가
+import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -15,10 +17,11 @@ import java.util.concurrent.TimeUnit;
 
 import com.next_step_be.next_step_be.jwt.JwtAuthenticationFilter;
 import com.next_step_be.next_step_be.jwt.JwtTokenProvider;
-import com.next_step_be.next_step_be.repository.CookieAuthorizationRequestRepository; // 패키지 경로 확인!
+import com.next_step_be.next_step_be.repository.CookieAuthorizationRequestRepository;
 import com.next_step_be.next_step_be.service.CustomUserDetailsService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j; // 로깅을 위해 Slf4j 임포트 추가
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -45,15 +48,15 @@ import java.util.List;
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
+@Slf4j // Slf4j 어노테이션 추가
 public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomUserDetailsService customUserDetailsService;
     private final CookieAuthorizationRequestRepository cookieAuthorizationRequestRepository;
-    private final RedisTemplate<String, String> redisTemplate; // ✅ RedisTemplate 주입 추가
+    private final RedisTemplate<String, String> redisTemplate;
 
-    // ✅ 프론트엔드 URL 주입 추가
-    @Value("${frontend.oauth2-redirect-url}") // 새로운 속성 이름 사용을 권장합니다.
+    @Value("${frontend.oauth2-redirect-url}")
     private String frontendOAuth2RedirectUrl;
 
     @Bean
@@ -82,10 +85,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // ✅ 수정된 부분: setAllowedOriginPatterns 대신 setAllowedOrigins를 사용하여 정확한 출처를 지정
-        configuration.setAllowedOrigins(List.of("https://portfolio-nextstep.info", "http://localhost:5173")); // 로컬 개발용도 추가
-        // 개발 완료 후 "http://localhost:3000"은 제거하는 것이 좋습니다.
-
+        configuration.setAllowedOrigins(List.of("https://portfolio-nextstep.info", "http://localhost:5173"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Refresh-Token", "X-Requested-With", "Accept"));
         configuration.setAllowCredentials(true);
@@ -119,31 +119,16 @@ public class SecurityConfig {
                     try {
                         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
 
-                        String username = null;
-                        Map<String, Object> attributes = oAuth2User.getAttributes();
-                        if (attributes != null && attributes.containsKey("kakao_account")) {
-                        	Object kakaoAccountObj = attributes.get("kakao_account");
-                        	if (kakaoAccountObj instanceof Map<?, ?> rawMap) {
-                        	    Map<?, ?> genericMap = rawMap;
-                        	    Object emailObj = genericMap.get("email");
-                        	    if (emailObj instanceof String email) {
-                        	        username = email;
-                        	    }
-                        	}
-                        }
+                        // extractUsernameFromOAuth2 헬퍼 메서드 사용
+                        String username = extractUsernameFromOAuth2(oAuth2User);
 
                         if (username == null || username.isEmpty()) {
-                            Object id = oAuth2User.getAttribute("id");
-                            if (id != null) {
-                                username = String.valueOf(id);
-                            } else {
-                                // 실패 시에도 동일한 frontendOAuth2RedirectUrl 사용
-                                response.sendRedirect(frontendOAuth2RedirectUrl + "?error=" + URLEncoder.encode("Kakao user info (email/id) missing", StandardCharsets.UTF_8));
-                                return;
-                            }
+                            log.warn("카카오 사용자 정보 (이메일/ID) 누락: {}", oAuth2User.getAttributes());
+                            response.sendRedirect(frontendOAuth2RedirectUrl + "?error=" + URLEncoder.encode("Kakao user info (email/id) missing", StandardCharsets.UTF_8));
+                            return;
                         }
 
-                        String role = "ROLE_USER";
+                        String role = "ROLE_USER"; // 필요에 따라 역할 부여 로직 추가
 
                         UsernamePasswordAuthenticationToken authToken =
                             new UsernamePasswordAuthenticationToken(username, null, List.of(new SimpleGrantedAuthority(role)));
@@ -154,8 +139,9 @@ public class SecurityConfig {
                         if (username != null && !username.isEmpty()) {
                             redisTemplate.opsForValue().set("refresh:" + username, refreshToken,
                                     jwtTokenProvider.getRefreshTokenExpiration(), TimeUnit.MILLISECONDS);
+                            log.info("카카오 로그인 성공 및 토큰 발급: {}", username);
                         } else {
-                            // 실패 시에도 동일한 frontendOAuth2RedirectUrl 사용
+                            log.error("토큰 저장을 위한 사용자 이름이 유효하지 않음: {}", username);
                             response.sendRedirect(frontendOAuth2RedirectUrl + "?error=" + URLEncoder.encode("Failed to save refresh token (username invalid)", StandardCharsets.UTF_8));
                             return;
                         }
@@ -167,33 +153,59 @@ public class SecurityConfig {
                         cookie.setMaxAge((int) (jwtTokenProvider.getRefreshTokenExpiration() / 1000));
                         response.addCookie(cookie);
 
-                        // 성공 시에도 동일한 frontendOAuth2RedirectUrl 사용
                         String redirectUrl = frontendOAuth2RedirectUrl + "?accessToken=" + URLEncoder.encode(accessToken, StandardCharsets.UTF_8);
                         response.sendRedirect(redirectUrl);
 
                         cookieAuthorizationRequestRepository.removeAuthorizationRequestCookies(request, response);
 
                     } catch (IOException e) {
-                        System.err.println("Error in OAuth2 successHandler: " + e.getMessage());
+                        log.error("OAuth2 successHandler 처리 중 IO 예외 발생: {}", e.getMessage(), e);
                         response.sendRedirect(frontendOAuth2RedirectUrl + "?error=" + URLEncoder.encode("Internal server error during login", StandardCharsets.UTF_8));
+                    } catch (Exception e) { // 기타 예외 처리 추가
+                        log.error("OAuth2 successHandler 처리 중 알 수 없는 예외 발생: {}", e.getMessage(), e);
+                        response.sendRedirect(frontendOAuth2RedirectUrl + "?error=" + URLEncoder.encode("Unexpected error during login", StandardCharsets.UTF_8));
                     }
                 })
                 .failureHandler((request, response, exception) -> {
                     try {
                         String errorMessage = exception.getMessage() != null ? exception.getMessage() : "Authentication failed";
-                        // ✅ 실패 시 frontendOAuth2RedirectUrl로 리다이렉트
+                        log.error("OAuth2 로그인 실패: {}", errorMessage, exception);
                         response.sendRedirect(frontendOAuth2RedirectUrl + "?error=" + URLEncoder.encode(errorMessage, StandardCharsets.UTF_8));
                     } catch (IOException e) {
-                        System.err.println("Error in OAuth2 failureHandler: " + e.getMessage());
+                        log.error("OAuth2 failureHandler 처리 중 IO 예외 발생: {}", e.getMessage(), e);
                     }
                 })
             );
 
         http.addFilterBefore(
-        	    new JwtAuthenticationFilter(jwtTokenProvider, redisTemplate),
-        	    UsernamePasswordAuthenticationFilter.class
-        	);
+            new JwtAuthenticationFilter(jwtTokenProvider, redisTemplate),
+            UsernamePasswordAuthenticationFilter.class
+        );
 
         return http.build();
+    }
+
+    /**
+     * OAuth2User 객체에서 username(email 또는 id)을 추출하는 헬퍼 메서드
+     * 이 메서드는 SecurityConfig 클래스 내부에서만 사용됩니다.
+     */
+    private String extractUsernameFromOAuth2(OAuth2User oAuth2User) {
+        Map<String, Object> attributes = oAuth2User.getAttributes();
+
+        // 카카오 계정 정보에서 이메일 추출 시도
+        if (attributes != null && attributes.containsKey("kakao_account")) {
+            Object kakaoAccountObj = attributes.get("kakao_account");
+            if (kakaoAccountObj instanceof Map<?, ?> rawMap) {
+                Map<?, ?> genericMap = rawMap;
+                Object emailObj = genericMap.get("email");
+                if (emailObj instanceof String email) {
+                    return email;
+                }
+            }
+        }
+
+        // 이메일이 없을 경우, id (숫자)를 사용자 이름으로 사용
+        Object id = oAuth2User.getAttribute("id");
+        return id != null ? String.valueOf(id) : null;
     }
 }
