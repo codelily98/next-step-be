@@ -5,16 +5,21 @@ import com.next_step_be.next_step_be.domain.User;
 import com.next_step_be.next_step_be.dto.UpdateProfileRequest;
 import com.next_step_be.next_step_be.dto.UserCacheDto;
 import com.next_step_be.next_step_be.dto.UserResponse;
+import com.next_step_be.next_step_be.jwt.JwtTokenProvider;
 import com.next_step_be.next_step_be.service.UserService;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/api/user")
@@ -24,8 +29,8 @@ public class UserController {
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final UserService userService;
+    private final JwtTokenProvider jwtTokenProvider;
 
-    // ✅ 로그인 사용자 정보 반환 (Redis 캐시 → DB fallback → null-safe DTO 반환)
     @GetMapping("/me")
     public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal User principal) {
         String username = principal.getUsername();
@@ -37,7 +42,6 @@ public class UserController {
                 UserCacheDto userDto = objectMapper.readValue(cachedUser, UserCacheDto.class);
                 return ResponseEntity.ok(UserResponse.from(userDto));
             } else {
-                // 캐시에 없을 경우 DB에서 사용자 정보 조회
                 User dbUser = userService.getUserByUsername(username);
                 if (dbUser == null) {
                     return ResponseEntity.status(404).body("사용자 정보를 찾을 수 없습니다.");
@@ -50,7 +54,6 @@ public class UserController {
                         .profileImageUrl(dbUser.getProfileImageUrl())
                         .build();
 
-                // Redis 캐싱 추가
                 String json = objectMapper.writeValueAsString(fallbackUser);
                 redisTemplate.opsForValue().set(userKey, json);
 
@@ -62,7 +65,6 @@ public class UserController {
         }
     }
 
-    // ✅ 닉네임 중복 검사
     @PostMapping("/check-nickname")
     public ResponseEntity<?> checkNickname(
             @RequestBody Map<String, String> body,
@@ -89,13 +91,43 @@ public class UserController {
                 : ResponseEntity.ok("사용 가능한 닉네임입니다.");
     }
 
-    // ✅ 사용자 프로필 업데이트 (닉네임 + 프로필 이미지)
     @PutMapping
-    public ResponseEntity<String> updateProfile(
+    public ResponseEntity<?> updateProfile(
             @ModelAttribute UpdateProfileRequest request,
             @AuthenticationPrincipal User user) {
 
         userService.updateProfile(user.getUsername(), request);
-        return ResponseEntity.ok("프로필이 성공적으로 수정되었습니다.");
+
+        // 토큰 재발급 로직 추가
+        UsernamePasswordAuthenticationToken authToken =
+                new UsernamePasswordAuthenticationToken(user.getUsername(), null,
+                        List.of(new SimpleGrantedAuthority(user.getRole().name())));
+
+        String accessToken = jwtTokenProvider.generateToken(authToken, false);
+        String refreshToken = jwtTokenProvider.generateToken(authToken, true);
+
+        // Redis refreshToken 저장
+        redisTemplate.opsForValue().set("refresh:" + user.getUsername(), refreshToken,
+                jwtTokenProvider.getRefreshTokenExpiration(), TimeUnit.MILLISECONDS);
+
+        // 새로운 사용자 정보 반환
+        User updatedUser = userService.getUserByUsername(user.getUsername());
+        UserCacheDto updatedCache = UserCacheDto.builder()
+                .username(updatedUser.getUsername())
+                .nickname(updatedUser.getNickname())
+                .role(updatedUser.getRole())
+                .profileImageUrl(updatedUser.getProfileImageUrl())
+                .build();
+
+        // Redis 캐시 갱신
+        try {
+            String json = objectMapper.writeValueAsString(updatedCache);
+            redisTemplate.opsForValue().set("user:" + updatedUser.getUsername(), json);
+        } catch (Exception ignored) {}
+
+        return ResponseEntity.ok(Map.of(
+                "message", "프로필이 성공적으로 수정되었습니다.",
+                "accessToken", accessToken
+        ));
     }
 }
